@@ -1,0 +1,59 @@
+# ============================================================
+# SuddWatch - Flood Detection & Humanitarian Alert System
+# Requirements File
+# Course: SWE3090 - Software Project 1
+# Student: Madut Chan (671336)
+# ============================================================
+
+# --- Core Utilities ---
+python-dotenv>=1.0.0        # Loads .env file into environment variables
+requests>=2.31.0            # HTTP requests for API calls (Copernicus, Twilio)
+python-json-logger>=2.0.0   # JSON-formatted logging for structured log files
+
+# --- Numerical & Scientific Computing ---
+numpy>=1.24.0               # Array operations for raster data processing
+scipy>=1.10.0               # TPI calculation and Gaussian Mixture Modelling
+pandas>=2.0.0               # DataFrame operations for query results and reports
+
+# --- Geospatial Raster Processing ---
+rasterio>=1.3.0             # Read/write GeoTIFF files (SAR data, flood masks, DEM)
+xarray>=2023.0.0            # Multi-dimensional raster data handling
+rioxarray>=0.15.0           # Rasterio extension for xarray (reprojection, clipping)
+
+# --- Geospatial Vector Processing ---
+geopandas>=0.14.0           # Vector data operations (OSM data, villages, roads)
+shapely>=2.0.0              # Geometry operations (intersection checks, buffers)
+pyproj>=3.5.0               # Coordinate reference system transformations
+fiona>=1.9.0                # Vector file I/O (reading/writing GeoJSON, shapefiles)
+
+# --- Image Processing & Machine Learning ---
+scikit-image>=0.21.0        # Otsu thresholding for flood detection
+opencv-python>=4.8.0        # Morphological operations (closing, opening)
+scikit-learn>=1.3.0         # Gaussian Mixture Model + Random Forest classifier
+joblib>=1.3.0               # Model serialisation (saving/loading Random Forest)
+
+# --- Database ---
+# sqlite3 is built into Python - no install needed
+
+# --- Dashboard & Visualisation ---
+streamlit>=1.28.0           # Web dashboard UI framework
+folium>=0.15.0              # Interactive maps with flood extent overlay
+streamlit-folium>=0.17.0    # Embeds Folium maps inside Streamlit
+plotly>=5.18.0              # Performance charts (latency, IoU trends)
+
+# --- Alert Systems ---
+twilio>=8.0.0               # SMS alert delivery via Twilio API
+
+# --- Version Control & GitHub Sync ---
+PyGithub>=2.0.0             # GitHub API for committing flood outputs to repo
+
+# --- Testing ---
+pytest>=7.4.0               # Test runner for all unit and integration tests
+pytest-cov>=4.1.0           # Code coverage reporting for tests
+
+# --- SNAP SAR Processing ---
+# esa_snappy is installed separately via:
+#   pip install esa_snappy
+# On Apple Silicon Macs, use SNAP GPT subprocess approach instead:
+#   /Applications/esa-snap/bin/gpt
+# This is handled automatically in src/preprocessing.py
