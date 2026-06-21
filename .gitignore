@@ -1,0 +1,28 @@
+# Credentials - NEVER commit
+.env
+
+# Data files - too large for GitHub
+data/raw/
+data/processed/
+data/dem/
+data/flood_masks/
+data/database/
+data/worldpop/
+data/osm/
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs and models
+logs/
+models/
+
+# SNAP temporary files
+*.dim
+*.data/
+
+# macOS
+.DS_Store
