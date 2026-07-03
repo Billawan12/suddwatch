@@ -26,3 +26,4 @@ models/
 
 # macOS
 .DS_Store
+dashboard/suddwatch_dash.db

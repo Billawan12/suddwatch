@@ -1,0 +1,123 @@
+<graph id="SuddWatchPreprocessing">
+  <version>1.0</version>
+
+  <!-- Step 1: Read the raw Sentinel-1 scene -->
+  <node id="Read">
+    <operator>Read</operator>
+    <sources/>
+    <parameters>
+      <file>/var/folders/t8/8wgw6v857zj21xm7mqk3qrhh0000gn/T/tmphj19q2c8/test_scene.zip</file>
+    </parameters>
+  </node>
+
+  <!-- Step 2: Apply precise orbit correction -->
+  <!-- Downloads precise orbit files from ESA automatically -->
+  <node id="Apply-Orbit-File">
+    <operator>Apply-Orbit-File</operator>
+    <sources>
+      <sourceProduct refid="Read"/>
+    </sources>
+    <parameters>
+      <orbitType>Sentinel Precise (Auto Download)</orbitType>
+      <polyDegree>3</polyDegree>
+      <continueOnFail>true</continueOnFail>
+    </parameters>
+  </node>
+
+  <!-- Step 3: Radiometric calibration to sigma0 backscatter -->
+  <!-- VH polarisation is selected — most sensitive to surface water -->
+  <node id="Calibration">
+    <operator>Calibration</operator>
+    <sources>
+      <sourceProduct refid="Apply-Orbit-File"/>
+    </sources>
+    <parameters>
+      <sourceBands/>
+      <auxFile>Product Auxiliary File</auxFile>
+      <externalAuxFile/>
+      <outputImageInComplex>false</outputImageInComplex>
+      <outputImageScaleInDb>false</outputImageScaleInDb>
+      <createGammaBand>false</createGammaBand>
+      <createBetaBand>false</createBetaBand>
+      <selectedPolarisations>VH</selectedPolarisations>
+      <outputSigmaBand>true</outputSigmaBand>
+      <outputGammaBand>false</outputGammaBand>
+      <outputBetaBand>false</outputBetaBand>
+    </parameters>
+  </node>
+
+  <!-- Step 4: Lee speckle filter to reduce SAR noise -->
+  <!-- 5x5 window is standard for Sentinel-1 IW GRD -->
+  <node id="Speckle-Filter">
+    <operator>Speckle-Filter</operator>
+    <sources>
+      <sourceProduct refid="Calibration"/>
+    </sources>
+    <parameters>
+      <sourceBands/>
+      <filter>Lee</filter>
+      <filterSizeX>5</filterSizeX>
+      <filterSizeY>5</filterSizeY>
+      <dampingFactor>2</dampingFactor>
+      <estimateENL>true</estimateENL>
+      <enl>1.0</enl>
+      <numLooksStr>1</numLooksStr>
+      <targetWindowSizeStr>3x3</targetWindowSizeStr>
+      <sigmaStr>0.9</sigmaStr>
+      <anSize>50</anSize>
+    </parameters>
+  </node>
+
+  <!-- Step 5: Terrain correction — orthorectification -->
+  <!-- Uses SRTM 3Sec DEM (auto-downloaded by SNAP) -->
+  <!-- Output projected to WGS84 (EPSG:4326) for consistency -->
+  <node id="Terrain-Correction">
+    <operator>Terrain-Correction</operator>
+    <sources>
+      <sourceProduct refid="Speckle-Filter"/>
+    </sources>
+    <parameters>
+      <sourceBands/>
+      <demName>SRTM 3Sec</demName>
+      <externalDEMFile/>
+      <externalDEMNoDataValue>0.0</externalDEMNoDataValue>
+      <externalDEMApplyEGM>true</externalDEMApplyEGM>
+      <demResamplingMethod>BILINEAR_INTERPOLATION</demResamplingMethod>
+      <imgResamplingMethod>BILINEAR_INTERPOLATION</imgResamplingMethod>
+      <pixelSpacingInMeter>10.0</pixelSpacingInMeter>
+      <pixelSpacingInDegree>8.983152841195215E-5</pixelSpacingInDegree>
+      <mapProjection>GEOGCS[&quot;WGS84(DD)&quot;, DATUM[&quot;WGS84&quot;, SPHEROID[&quot;WGS84&quot;, 6378137.0, 298.257223563]], PRIMEM[&quot;Greenwich&quot;, 0.0], UNIT[&quot;degree&quot;, 0.017453292519943295], AXIS[&quot;Geodetic longitude&quot;, EAST], AXIS[&quot;Geodetic latitude&quot;, NORTH]]</mapProjection>  <!-- WGS84 EPSG:4326 -->
+      <alignToStandardGrid>false</alignToStandardGrid>
+      <standardGridOriginX>0.0</standardGridOriginX>
+      <standardGridOriginY>0.0</standardGridOriginY>
+      <nodataValueAtSea>false</nodataValueAtSea>  <!-- false: Sudd is inland, not sea -->
+      <saveDEM>false</saveDEM>
+      <saveLatLon>false</saveLatLon>
+      <saveIncidenceAngleFromEllipsoid>false</saveIncidenceAngleFromEllipsoid>
+      <saveLocalIncidenceAngle>false</saveLocalIncidenceAngle>
+      <saveProjectedLocalIncidenceAngle>false</saveProjectedLocalIncidenceAngle>
+      <saveSelectedSourceBand>true</saveSelectedSourceBand>
+      <saveLayoverShadowMask>false</saveLayoverShadowMask>
+      <applyRadiometricNormalization>false</applyRadiometricNormalization>
+      <saveSigmaNought>false</saveSigmaNought>
+      <saveGammaNought>false</saveGammaNought>
+      <saveBetaNought>false</saveBetaNought>
+      <incidenceAngleForSigma0>Use projected local incidence angle from DEM</incidenceAngleForSigma0>
+      <incidenceAngleForGamma0>Use projected local incidence angle from DEM</incidenceAngleForGamma0>
+      <auxFile>Latest Auxiliary File</auxFile>
+    </parameters>
+  </node>
+
+  <!-- Step 6: Write output as GeoTIFF -->
+  <node id="Write">
+    <operator>Write</operator>
+    <sources>
+      <sourceProduct refid="Terrain-Correction"/>
+    </sources>
+    <parameters>
+      <file>/Users/billawan/suddwatch/data/processed/test_scene_sigma0.tif</file>
+      <formatName>GeoTIFF</formatName>
+    </parameters>
+  </node>
+
+</graph>
