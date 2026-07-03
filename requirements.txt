@@ -57,3 +57,4 @@ pytest-cov>=4.1.0           # Code coverage reporting for tests
 # On Apple Silicon Macs, use SNAP GPT subprocess approach instead:
 #   /Applications/esa-snap/bin/gpt
 # This is handled automatically in src/preprocessing.py
+streamlit-autorefresh==1.0.1

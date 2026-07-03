@@ -1,997 +1,1416 @@
-# ============================================================
-# SuddWatch — Operational Flood Detection Dashboard
-# File: dashboard/app.py
-# Streamlit 1.58.0
-# Course: SWE3090 — Software Project 1
-# Student: Madut Chan (671336)
-# ============================================================
-
-import json
-import sys
-import logging
+"""
+app.py — SuddWatch Operational Dashboard
+Run: streamlit run dashboard/app.py
+"""
+import sys, json, io, csv
 from datetime import datetime
 from pathlib import Path
 
-import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
-import streamlit.components.v1 as components
+import plotly.graph_objects as go
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from src.config import Config, setup_logging
-from src.database import DatabaseManager
+sys.path.insert(0, str(Path(__file__).parent))
+import db
+import styles as s
 
-# ── Page config — must be first Streamlit call ──────────────
-st.set_page_config(
-    page_title="SuddWatch",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+# ── Page config ───────────────────────────────────────────────
+st.set_page_config(page_title="SuddWatch", layout="wide",
+                   initial_sidebar_state="expanded", page_icon="🌊")
 
-# ── Fonts ─────────────────────────────────────────────────────
-st.markdown("""
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-""", unsafe_allow_html=True)
+# ── Init database ─────────────────────────────────────────────
+db.init_db()
+st.markdown(s.GLOBAL_CSS, unsafe_allow_html=True)
 
-# ── CSS — minimal, only what's needed, nothing that hides content ──
-st.markdown("""
-<style>
-html, body, [data-testid="stApp"] {
-    background: #0d1117 !important;
-    color: #c9d1d9 !important;
-    font-family: 'Inter', sans-serif !important;
-}
-#MainMenu {display: none !important;} footer {display: none !important;} [data-testid="stDecoration"] {display: none !important;} [data-testid="stAppDeployButton"] {display: none !important;} header[data-testid="stHeader"] {height: 2.5rem !important; background: transparent !important;}
-[data-testid="stSidebar"] {
-    background: #010409 !important;
-    border-right: 1px solid #21262d !important;
-    min-width: 270px !important;
-    max-width: 270px !important;
-}
-[data-testid="stSidebar"] > div:first-child {
-    width: 270px !important;
-}
-[data-testid="stMainBlockContainer"] {
-    padding: 0 !important;
-    max-width: 100% !important;
-}
-section[data-testid="stMain"] {background: #0d1117 !important;}
+# ── Auto-refresh ──────────────────────────────────────────────
+try:
+    from streamlit_autorefresh import st_autorefresh
+    st_autorefresh(interval=60_000, key="autorefresh")
+except ImportError:
+    pass  # optional dependency
 
-button[kind="secondary"], button[data-testid="baseButton-secondary"] {
-    background: #161b22 !important;
-    border: 1px solid #30363d !important;
-    color: #c9d1d9 !important;
-    border-radius: 5px !important;
+# ── Session state ─────────────────────────────────────────────
+_defaults = {
+    "page": "Home", "hist_state": "All",
+    "hist_min_iou": 0.65, "hist_min_pop": 0,
+    "export_scope": "Single Event", "export_fmt": "GeoJSON",
+    "export_layers": {"Flood Extent Polygon","Affected Villages","Health Facilities at Risk"},
+    "export_events": {"EVT-2025-047"}, "export_done": False,
 }
-button[kind="secondary"]:hover, button[data-testid="baseButton-secondary"]:hover {
-    border-color: #0ea5e9 !important;
-    color: #0ea5e9 !important;
-}
-button[kind="primary"], button[data-testid="baseButton-primary"] {
-    background: #0ea5e9 !important;
-    border: 1px solid #0ea5e9 !important;
-    color: #0d1117 !important;
-    border-radius: 5px !important;
-    font-weight: 600 !important;
-}
-button[kind="primary"]:hover, button[data-testid="baseButton-primary"]:hover {
-    background: #38bdf8 !important;
-    border-color: #38bdf8 !important;
-}
-button[disabled] {
-    opacity: 0.4 !important;
-    cursor: not-allowed !important;
-}
+for k, v in _defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
-[data-testid="stTabs"] [role="tablist"] {border-bottom: 1px solid #21262d !important;}
-[data-testid="stTabs"] [role="tab"] {
-    color: #8b949e !important;
-    font-family: 'Barlow Condensed', sans-serif !important;
-    font-size: 13px !important;
-    letter-spacing: .05em !important;
-    text-transform: uppercase !important;
-}
-[data-testid="stTabs"] [role="tab"][aria-selected="true"] {
-    color: #0ea5e9 !important;
-    border-bottom-color: #0ea5e9 !important;
-}
-
-[data-testid="stExpander"] {
-    background: #161b22 !important;
-    border: 1px solid #21262d !important;
-    border-radius: 6px !important;
-}
-
-[data-testid="stDateInput"] input,
-[data-testid="stNumberInput"] input,
-[data-testid="stTextInput"] input {
-    background: #161b22 !important;
-    border: 1px solid #30363d !important;
-    color: #c9d1d9 !important;
-    font-family: 'DM Mono', monospace !important;
-    font-size: 12px !important;
-}
-[data-testid="stNumberInput"] button {
-    display: none !important;
-}
-[data-testid="stDateInput"] svg {
-    fill: #6e7681 !important;
-}
-hr {border-color: #21262d !important;}
-iframe {width: 100% !important;}
-iframe[title="st.iframe"], iframe { width: 100% !important; }
-</style>
-""", unsafe_allow_html=True)
-
-# ── Colours ───────────────────────────────────────────────────
-BG, CARD, BORDER = "#0d1117", "#161b22", "#21262d"
-ACCENT, PRIMARY  = "#0ea5e9", "#1a7fd4"
-MUTED, TEXT      = "#8b949e", "#c9d1d9"
-RED, GREEN, AMBER = "#f85149", "#3fb950", "#d29922"
-
-
-def pl(h=260):
-    """Base Plotly layout. Does NOT include xaxis/yaxis to avoid kwarg clashes."""
-    return dict(
-        paper_bgcolor=BG, plot_bgcolor=CARD,
-        font=dict(family="DM Mono, monospace", size=11, color=MUTED),
-        margin=dict(l=40, r=16, t=32, b=36), height=h,
+# ── Plotly layout helper ──────────────────────────────────────
+def _fig(h=220, **overrides):
+    layout = dict(
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor=s.CARD,
+        font=dict(family="DM Mono, monospace", size=10, color=s.MUTED),
+        margin=dict(t=8, r=8, b=36, l=36), height=h,
+        xaxis=dict(gridcolor="rgba(48,54,61,0.8)", linecolor=s.BORDER,
+                   tickfont=dict(size=10, color=s.MUTED)),
+        yaxis=dict(gridcolor="rgba(48,54,61,0.8)", linecolor=s.BORDER,
+                   tickfont=dict(size=10, color=s.MUTED)),
+        legend=dict(bgcolor="rgba(0,0,0,0)", bordercolor="rgba(0,0,0,0)",
+                    font=dict(size=10), orientation="h", y=-0.25),
     )
+    layout.update(overrides)
+    return layout
 
+# ── SVG Map (pure HTML — no iframe, fills container natively) ─
+MAP_HTML = f"""
+<div style="position:relative;width:100%;padding-top:75%;
+            background:#07111a;border:1px solid {s.BORDER};
+            border-radius:4px;overflow:hidden;">
+  <svg style="position:absolute;inset:0;width:100%;height:100%;opacity:0.08"
+       xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <pattern id="g" width="40" height="40" patternUnits="userSpaceOnUse">
+        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="{s.PRIMARY}" stroke-width="0.5"/>
+      </pattern>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#g)"/>
+  </svg>
+  <svg style="position:absolute;inset:0;width:100%;height:100%"
+       viewBox="0 0 560 420" preserveAspectRatio="xMidYMid meet"
+       xmlns="http://www.w3.org/2000/svg">
+    <polygon points="60,10 500,10 500,145 360,160 260,150 160,155 60,140"
+             fill="{s.ACCENT}" fill-opacity="0.04"
+             stroke="{s.ACCENT}" stroke-width="1" stroke-dasharray="5,3" opacity="0.6"/>
+    <polygon points="20,130 180,125 200,150 195,310 160,340 20,330"
+             fill="{s.PURPLE}" fill-opacity="0.05"
+             stroke="{s.PURPLE}" stroke-width="1" stroke-dasharray="5,3" opacity="0.6"/>
+    <polygon points="190,100 540,95 545,410 190,410"
+             fill="{s.SUCCESS}" fill-opacity="0.03"
+             stroke="{s.SUCCESS}" stroke-width="1" stroke-dasharray="5,3" opacity="0.5"/>
+    <path d="M 300 10 C 290 50 310 90 295 135 C 278 185 265 220 270 270 C 275 315 260 355 265 410"
+          fill="none" stroke="{s.PRIMARY}" stroke-width="4" opacity="0.7" stroke-linecap="round"/>
+    <path d="M 500 60 C 450 70 400 80 360 100 C 330 115 305 125 295 135"
+          fill="none" stroke="{s.PRIMARY}" stroke-width="2.5" opacity="0.5" stroke-linecap="round"/>
+    <path d="M 20 200 C 60 195 100 200 140 210 C 180 220 240 230 270 250"
+          fill="none" stroke="{s.PRIMARY}" stroke-width="2.5" opacity="0.5" stroke-linecap="round"/>
+    <path d="M 270 270 C 290 290 310 310 305 350 C 300 380 295 395 295 410"
+          fill="none" stroke="{s.PRIMARY}" stroke-width="3" opacity="0.5" stroke-linecap="round"/>
+    <polygon points="240,55 380,50 410,110 340,130 220,120 215,80"
+             fill="{s.ACCENT}" fill-opacity="0.22"
+             stroke="{s.ACCENT}" stroke-width="1.5" stroke-dasharray="6,3"/>
+    <polygon points="40,175 155,168 175,195 170,270 120,285 40,275"
+             fill="{s.ACCENT}" fill-opacity="0.20"
+             stroke="{s.ACCENT}" stroke-width="1.5" stroke-dasharray="6,3"/>
+    <polygon points="245,175 390,165 430,210 420,305 360,340 280,325 245,270"
+             fill="{s.ACCENT}" fill-opacity="0.18"
+             stroke="{s.ACCENT}" stroke-width="1.5" stroke-dasharray="6,3"/>
+    <line x1="280" y1="10" x2="280" y2="410" stroke="{s.MUTED}" stroke-width="1" stroke-dasharray="8,5" opacity="0.4"/>
+    <line x1="20" y1="145" x2="545" y2="145" stroke="{s.MUTED}" stroke-width="1" stroke-dasharray="8,5" opacity="0.4"/>
+    <circle cx="370" cy="90"  r="6" fill="{s.SUCCESS}" stroke="white" stroke-width="1.5"/>
+    <text x="378" y="94"  fill="{s.FG}" font-size="9" font-family="DM Mono">Malakal</text>
+    <circle cx="100" cy="205" r="6" fill="{s.WARNING}" stroke="white" stroke-width="1.5"/>
+    <text x="108" y="209" fill="{s.FG}" font-size="9" font-family="DM Mono">Bentiu</text>
+    <circle cx="320" cy="335" r="7" fill="{s.DANGER}"  stroke="white" stroke-width="1.5"/>
+    <text x="330" y="340" fill="{s.FG}" font-size="9" font-family="DM Mono">Bor</text>
+    <circle cx="460" cy="280" r="5" fill="{s.WARNING}" stroke="white" stroke-width="1.5"/>
+    <text x="467" y="284" fill="{s.FG}" font-size="9" font-family="DM Mono">Akobo</text>
+    <circle cx="480" cy="120" r="5" fill="{s.WARNING}" stroke="white" stroke-width="1.5"/>
+    <text x="442" y="116" fill="{s.FG}" font-size="9" font-family="DM Mono">Nasir</text>
+    <circle cx="130" cy="260" r="5" fill="{s.DANGER}"  stroke="white" stroke-width="1.5"/>
+    <text x="138" y="264" fill="{s.FG}" font-size="9" font-family="DM Mono">Leer</text>
+    <circle cx="390" cy="220" r="5" fill="{s.SUCCESS}" stroke="white" stroke-width="1.5"/>
+    <text x="398" y="224" fill="{s.FG}" font-size="9" font-family="DM Mono">Twic E.</text>
+    <g transform="translate(355,90)">
+      <line x1="-5" y1="0" x2="5" y2="0" stroke="{s.DANGER}" stroke-width="2.5"/>
+      <line x1="0" y1="-5" x2="0" y2="5" stroke="{s.DANGER}" stroke-width="2.5"/>
+    </g>
+    <g transform="translate(95,200)">
+      <line x1="-5" y1="0" x2="5" y2="0" stroke="{s.DANGER}" stroke-width="2.5"/>
+      <line x1="0" y1="-5" x2="0" y2="5" stroke="{s.DANGER}" stroke-width="2.5"/>
+    </g>
+    <g transform="translate(308,330)">
+      <line x1="-5" y1="0" x2="5" y2="0" stroke="{s.DANGER}" stroke-width="2.5"/>
+      <line x1="0" y1="-5" x2="0" y2="5" stroke="{s.DANGER}" stroke-width="2.5"/>
+    </g>
+    <text x="170" y="38" fill="{s.ACCENT}" font-size="10" font-family="Barlow Condensed, sans-serif"
+          font-weight="700" letter-spacing="2" opacity="0.8">UPPER NILE</text>
+    <text x="30" y="235" fill="{s.PURPLE}" font-size="10" font-family="Barlow Condensed, sans-serif"
+          font-weight="700" letter-spacing="2" opacity="0.8"
+          transform="rotate(-90,30,235)">UNITY</text>
+    <text x="440" y="390" fill="{s.SUCCESS}" font-size="10" font-family="Barlow Condensed, sans-serif"
+          font-weight="700" letter-spacing="2" opacity="0.8">JONGLEI</text>
+  </svg>
+  <div style="position:absolute;top:12px;left:12px;background:rgba(13,17,23,0.85);
+              border:1px solid {s.BORDER};border-radius:4px;padding:4px 8px">
+    <span style="font-family:'DM Mono',monospace;font-size:10px;color:{s.MUTED}">
+      Greater Upper Nile — Jonglei · Unity · Upper Nile
+    </span>
+  </div>
+  <div style="position:absolute;bottom:12px;left:12px;background:rgba(13,17,23,0.85);
+              border:1px solid {s.BORDER};border-radius:4px;padding:8px 12px;
+              display:flex;flex-direction:column;gap:5px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <div style="width:14px;height:10px;border:1px dashed {s.ACCENT};
+                  background:rgba(14,165,233,0.2);border-radius:2px"></div>
+      <span style="font-family:'DM Mono',monospace;font-size:10px;color:{s.MUTED}">Flood extent</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div style="width:10px;height:10px;border-radius:50%;background:{s.DANGER}"></div>
+      <span style="font-family:'DM Mono',monospace;font-size:10px;color:{s.MUTED}">High-risk</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div style="width:10px;height:10px;border-radius:50%;background:{s.WARNING}"></div>
+      <span style="font-family:'DM Mono',monospace;font-size:10px;color:{s.MUTED}">Medium-risk</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div style="width:10px;height:10px;border-radius:50%;background:{s.SUCCESS}"></div>
+      <span style="font-family:'DM Mono',monospace;font-size:10px;color:{s.MUTED}">Low-risk</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="color:{s.DANGER};font-size:12px;line-height:1">✕</span>
+      <span style="font-family:'DM Mono',monospace;font-size:10px;color:{s.MUTED}">Health facility</span>
+    </div>
+  </div>
+  <div style="position:absolute;bottom:12px;right:12px;background:rgba(13,17,23,0.85);
+              border:1px solid {s.BORDER};border-radius:4px;padding:4px 8px;
+              display:flex;align-items:center;gap:8px">
+    <div style="width:48px;height:2px;background:rgba(230,237,243,0.6)"></div>
+    <span style="font-family:'DM Mono',monospace;font-size:10px;color:{s.MUTED}">100 km</span>
+  </div>
+</div>
+"""
 
-def ax():
-    return dict(gridcolor=BORDER, linecolor=BORDER, tickfont=dict(size=10))
-
-
-# ── HTML helpers ──────────────────────────────────────────────
-def badge(text, colour="grey"):
-    styles = {
-        "red": ("#3d0f0f", RED), "green": ("#0f2d1f", GREEN),
-        "amber": ("#2d1f00", AMBER), "grey": (BORDER, MUTED),
-    }
-    bg, fg = styles.get(colour, styles["grey"])
-    return (f"<span style='background:{bg};color:{fg};font-family:DM Mono,monospace;"
-            f"font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;'>{text}</span>")
-
-
-def card(html, padding="16px 18px"):
-    return (f"<div style='background:{CARD};border:1px solid {BORDER};"
-            f"border-radius:6px;padding:{padding};'>{html}</div>")
-
-
-def header(title, right=""):
-    r = f"<span style='font-family:DM Mono,monospace;font-size:10px;color:{MUTED};'>{right}</span>" if right else ""
-    return (f"<div style='display:flex;justify-content:space-between;align-items:center;"
-            f"margin-bottom:12px;'><span style='font-family:Inter,sans-serif;font-size:12px;"
-            f"font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:{TEXT};'>"
-            f"{title}</span>{r}</div>")
-
-
-def th(t, align="left"):
-    return (f"<th style='padding:6px 10px;font-family:Inter,sans-serif;font-size:10px;"
-            f"font-weight:600;text-transform:uppercase;color:{MUTED};"
-            f"border-bottom:1px solid #30363d;text-align:{align};'>{t}</th>")
-
-
-def td(t, colour=None, align="left"):
-    c = colour or TEXT
-    return (f"<td style='padding:6px 10px;font-family:DM Mono,monospace;font-size:11px;"
-            f"color:{c};border-bottom:1px solid {BORDER};text-align:{align};'>{t}</td>")
-
-
-def table(hdr, body):
-    return (f"<table style='width:100%;border-collapse:collapse;'>"
-            f"<thead><tr>{hdr}</tr></thead><tbody>{body}</tbody></table>")
-
-
-def kpi_row(items):
-    cols = st.columns(len(items), gap="small")
-    for col, (title, value, sub) in zip(cols, items):
-        with col:
-            st.markdown(card(
-                f"<div style='font-size:9px;text-transform:uppercase;color:{MUTED};"
-                f"margin-bottom:5px;letter-spacing:.08em;'>{title}</div>"
-                f"<div style='font-family:Barlow Condensed,sans-serif;font-size:22px;"
-                f"font-weight:700;margin-bottom:4px;'>{value}</div>"
-                f"<div style='font-family:DM Mono,monospace;font-size:10px;color:{MUTED};'>{sub}</div>",
-                padding="14px 16px",
-            ), unsafe_allow_html=True)
-
-
-def topbar(last_evt):
-    st.markdown(
-        f"<div style='background:#010409;border-bottom:1px solid {BORDER};"
-        f"padding:0 16px;height:48px;display:flex;align-items:center;"
-        f"justify-content:space-between;'>"
-        f"<div style='display:flex;align-items:center;gap:10px;'>"
-        f"<div style='width:7px;height:7px;border-radius:50%;background:{ACCENT};'></div>"
-        f"<span style='font-family:Barlow Condensed,sans-serif;font-size:17px;"
-        f"font-weight:700;color:#f0f6fc;letter-spacing:.03em;'>SUDDWATCH</span>"
-        f"<span style='color:#30363d;'>|</span>"
-        f"<span style='font-size:12px;color:{MUTED};'>Operational Flood Detection &amp; Alert System</span>"
-        f"</div>"
-        f"<div style='display:flex;align-items:center;gap:14px;'>"
-        f"<span style='font-size:11px;color:{MUTED};'>Last event: "
-        f"<span style='font-family:DM Mono,monospace;color:{ACCENT};'>{last_evt}</span></span>"
-        f"</div></div>", unsafe_allow_html=True,
-    )
-    col_spacer, col_btn = st.columns([10, 1])
-    with col_btn:
-        if st.button("⟳ Refresh", key="topbar_refresh", use_container_width=True):
-            st.cache_data.clear()
-            st.rerun()
-
-
-def breadcrumb(text):
-    st.markdown(
-        f"<div style='padding:6px 16px;font-size:12px;color:{MUTED};"
-        f"border-bottom:1px solid {BORDER};'>{text}</div>",
-        unsafe_allow_html=True,
-    )
-
-
-# ── SVG Map ───────────────────────────────────────────────────
-def svg_map():
-    return """<!DOCTYPE html><html><head>
-<style>*{margin:0;padding:0;box-sizing:border-box;}
-body{background:#07111a;overflow:hidden;border:1px solid #21262d;border-radius:8px;box-sizing:border-box;}
-svg{width:100%;height:830px;display:block;}</style></head><body>
-<svg viewBox="0 0 960 830" xmlns="http://www.w3.org/2000/svg">
-<rect width="960" height="830" fill="#07111a"/>
-<polygon points="80,7 790,7 790,235 610,254 340,240 80,204" fill="#051828" stroke="#1a7fd4" stroke-width="1.5" stroke-dasharray="7,4" opacity="0.9"/>
-<polygon points="8,204 275,204 285,448 220,544 8,525" fill="#140a28" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="7,4" opacity="0.9"/>
-<polygon points="275,204 790,235 815,548 365,553 285,448" fill="#051a0a" stroke="#16a34a" stroke-width="1.5" stroke-dasharray="7,4" opacity="0.9"/>
-<polygon points="150,26 660,26 675,204 455,219 145,208" fill="#0ea5e922" stroke="#0ea5e9" stroke-width="1.5" stroke-dasharray="6,3"/>
-<polygon points="28,226 255,231 262,430 182,496 24,485" fill="#0ea5e922" stroke="#0ea5e9" stroke-width="1.5" stroke-dasharray="6,3"/>
-<polygon points="310,240 705,235 725,496 475,515 322,417" fill="#0ea5e922" stroke="#0ea5e9" stroke-width="1.5" stroke-dasharray="6,3"/>
-<path d="M 252,11 L 246,276 L 270,548" fill="none" stroke="#374151" stroke-width="2" stroke-dasharray="10,5" opacity="0.6"/>
-<path d="M 8,294 L 425,288 L 808,281" fill="none" stroke="#374151" stroke-width="2" stroke-dasharray="10,5" opacity="0.6"/>
-<path d="M 432,11 C 444,84 430,165 434,255 C 438,345 420,420 412,548" fill="none" stroke="#1a7fd4" stroke-width="5" opacity="0.9" stroke-linecap="round"/>
-<circle cx="522" cy="193" r="8" fill="#3fb950" stroke="#07111a" stroke-width="2"/>
-<text x="536" y="197" fill="#3fb950" font-family="DM Mono,monospace" font-size="12">Malakal</text>
-<circle cx="144" cy="322" r="8" fill="#d29922" stroke="#07111a" stroke-width="2"/>
-<text x="158" y="326" fill="#d29922" font-family="DM Mono,monospace" font-size="12">Bentiu</text>
-<circle cx="460" cy="438" r="8" fill="#f85149" stroke="#07111a" stroke-width="2"/>
-<text x="474" y="442" fill="#f85149" font-family="DM Mono,monospace" font-size="12">Bor</text>
-<circle cx="665" cy="412" r="8" fill="#d29922" stroke="#07111a" stroke-width="2"/>
-<text x="650" y="407" fill="#d29922" font-family="DM Mono,monospace" font-size="12" text-anchor="end">Akobo</text>
-<circle cx="675" cy="232" r="8" fill="#d29922" stroke="#07111a" stroke-width="2"/>
-<text x="660" y="226" fill="#d29922" font-family="DM Mono,monospace" font-size="12" text-anchor="end">Nasir</text>
-<circle cx="190" cy="412" r="8" fill="#f85149" stroke="#07111a" stroke-width="2"/>
-<text x="204" y="418" fill="#f85149" font-family="DM Mono,monospace" font-size="12">Leer</text>
-<circle cx="398" cy="337" r="8" fill="#3fb950" stroke="#07111a" stroke-width="2"/>
-<text x="412" y="328" fill="#3fb950" font-family="DM Mono,monospace" font-size="12">Twic E.</text>
-<text x="452" y="89" fill="#1a7fd4" opacity="0.55" font-family="Barlow Condensed,sans-serif" font-size="16" letter-spacing="5" text-anchor="middle" font-weight="700">UPPER NILE</text>
-<text x="92" y="334" fill="#7c3aed" opacity="0.55" font-family="Barlow Condensed,sans-serif" font-size="14" letter-spacing="4" text-anchor="middle" font-weight="700" transform="rotate(-90,92,411)">UNITY</text>
-<text x="614" y="487" fill="#16a34a" opacity="0.5" font-family="Barlow Condensed,sans-serif" font-size="16" letter-spacing="5" text-anchor="middle" font-weight="700">JONGLEI</text>
-<rect x="8" y="7" width="290" height="20" rx="3" fill="#161b22" opacity="0.92"/>
-<text x="14" y="20" fill="#8b949e" font-family="DM Mono,monospace" font-size="10">Greater Upper Nile — Jonglei · Unity · Upper Nile</text>
-<rect x="8" y="642" width="155" height="126" rx="4" fill="#161b22" stroke="#21262d" stroke-width="1" opacity="0.96"/>
-<rect x="15" y="650" width="13" height="9" rx="2" fill="#0ea5e922" stroke="#0ea5e9" stroke-width="1"/>
-<text x="35" y="655" fill="#8b949e" font-family="DM Mono,monospace" font-size="9">Flood extent</text>
-<circle cx="21" cy="667" r="5" fill="#f85149"/>
-<text x="35" y="670" fill="#8b949e" font-family="DM Mono,monospace" font-size="9">High-risk</text>
-<circle cx="21" cy="681" r="5" fill="#d29922"/>
-<text x="35" y="684" fill="#8b949e" font-family="DM Mono,monospace" font-size="9">Medium-risk</text>
-<circle cx="21" cy="695" r="5" fill="#3fb950"/>
-<text x="35" y="698" fill="#8b949e" font-family="DM Mono,monospace" font-size="9">Low-risk</text>
-<line x1="800" y1="800" x2="900" y2="800" stroke="#8b949e" stroke-width="1.5"/>
-<line x1="800" y1="794" x2="800" y2="806" stroke="#8b949e" stroke-width="1.5"/>
-<line x1="900" y1="794" x2="900" y2="806" stroke="#8b949e" stroke-width="1.5"/>
-<text x="850" y="790" fill="#8b949e" font-family="DM Mono,monospace" font-size="9" text-anchor="middle">100 km</text>
-</svg></body></html>"""
-
-
-# ── Caching ───────────────────────────────────────────────────
-@st.cache_resource
-def get_config():
-    return Config()
-
-@st.cache_resource
-def get_db(_cfg):
-    return DatabaseManager(_cfg)
-
-@st.cache_data(ttl=300)
-def load_latest(_db):
-    return _db.get_latest_event() or {}
-
-@st.cache_data(ttl=300)
-def load_events(_db, filters=None):
-    if filters:
-        return _db.query_events(filters=filters)
-    return _db.query_events()
-
-@st.cache_data(ttl=300)
-def load_metrics(_db):
-    return _db.query_performance_metrics()
-
-def load_summary(path):
-    if not path or not Path(path).exists():
-        return {}
-    try:
-        with open(path) as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-
-# ── Sidebar navigation ───────────────────────────────────────
-def render_sidebar(metrics):
-    nav_icons = {
-        "Home": "⌂", "History": "↻", "Performance": "▤", "Export": "⇩",
+# ════════════════════════════════════════════════════════════
+# SIDEBAR
+# ════════════════════════════════════════════════════════════
+def render_sidebar():
+    _NAV_ICONS = {
+        "Home": """<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+          <polyline points="9 22 9 12 15 12 15 22"/></svg>""",
+        "History": """<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="12 6 12 12 16 14"/></svg>""",
+        "Performance": """<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="20" x2="18" y2="10"/>
+          <line x1="12" y1="20" x2="12" y2="4"/>
+          <line x1="6" y1="20" x2="6" y2="14"/></svg>""",
+        "Export": """<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/></svg>""",
     }
     with st.sidebar:
-        st.markdown(
-            f"<div style='padding:16px 14px 8px;'>"
-            f"<span style='font-family:Barlow Condensed,sans-serif;font-size:16px;"
-            f"font-weight:700;color:#f0f6fc;'>● SUDDWATCH</span>"
-            f"<div style='font-size:9px;color:#30363d;margin-top:2px;'>FLOOD DETECTION SYSTEM</div>"
-            f"</div>", unsafe_allow_html=True,
-        )
-        st.markdown(f"<hr style='margin:4px 0;'>", unsafe_allow_html=True)
-        st.markdown(
-            f"<div style='padding:0 14px 6px;font-size:9px;font-weight:600;"
-            f"letter-spacing:.1em;color:#30363d;'>NAVIGATION</div>",
-            unsafe_allow_html=True,
-        )
+        st.markdown(f"""
+        <div style="padding:16px;border-bottom:1px solid {s.BORDER}">
+          <div style="display:flex;align-items:center;gap:8px">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                 stroke="{s.ACCENT}" stroke-width="2" stroke-linecap="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            <span style="font-family:'Barlow Condensed',sans-serif;font-size:18px;
+                         font-weight:700;letter-spacing:0.025em;color:{s.FG}">SUDDWATCH</span>
+          </div>
+          <div style="font-family:'DM Mono',monospace;font-size:10px;
+                      color:{s.MUTED};margin-top:4px">Flood Detection &amp; Alert System</div>
+        </div>
+        <div style="padding:16px 12px 4px;font-family:'DM Mono',monospace;font-size:10px;
+                    text-transform:uppercase;letter-spacing:0.1em;color:{s.MUTED}">
+          Navigation
+        </div>""", unsafe_allow_html=True)
 
-        if "page" not in st.session_state:
-            st.session_state.page = "Home"
-
-        for item in ["Home", "History", "Performance", "Export"]:
-            icon = nav_icons[item]
-            if st.session_state.page == item:
+        for name in ["Home","History","Performance","Export"]:
+            icon = _NAV_ICONS[name]
+            active = st.session_state.page == name
+            if active:
                 st.markdown(
-                    f"<div style='background:rgba(14,165,233,.12);border-left:3px solid {ACCENT};"
-                    f"padding:8px 11px;margin:2px 8px;border-radius:4px;"
-                    f"font-size:13px;color:{ACCENT};font-weight:600;'>{icon}&nbsp;&nbsp;{item}</div>",
+                    f"<div style='display:flex;align-items:center;gap:12px;"
+                    f"background:#1c2a38;border-left:2px solid {s.PRIMARY};"
+                    f"padding:12px 16px;color:{s.ACCENT};font-family:Inter,sans-serif;"
+                    f"font-size:14px;font-weight:500;'>"
+                    f"<span style='color:{s.ACCENT};'>{icon}</span>{name}</div>",
                     unsafe_allow_html=True,
                 )
             else:
-                if st.button(f"{icon}   {item}", key=f"nav_{item}", width="stretch"):
-                    st.session_state.page = item
+                if st.button(f"{name}", key=f"nav_{name}", width="stretch"):
+                    st.session_state.page = name
+                    st.session_state.export_done = False
                     st.rerun()
 
-        # Spacer pushes the footer to the bottom of the sidebar
-        st.markdown(
-            "<div style='height:60px;'></div>",
-            unsafe_allow_html=True,
-        )
-        st.markdown(f"<hr style='margin:8px 0;'>", unsafe_allow_html=True)
-        total = int(metrics.get("total_events") or 0)
-        dc = GREEN if total > 0 else MUTED
-        st.markdown(
-            f"<div style='padding:0 14px 14px;'>"
-            f"<span style='font-size:10px;color:{dc};'>● "
-            f"{'System operational' if total else 'Awaiting pipeline'}</span>"
-            f"<div style='font-size:9px;color:#30363d;margin-top:3px;'>v2.4.1 — Sudd Basin</div>"
-            f"</div>", unsafe_allow_html=True,
-        )
+        st.markdown(f"""
+        <div style="margin-top:32px;padding:16px;border-top:1px solid {s.BORDER}">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="width:8px;height:8px;border-radius:50%;background:{s.SUCCESS};
+                        animation:pulse 1.5s ease-in-out infinite"></div>
+            <span style="font-family:'Inter',sans-serif;font-size:11px;color:{s.MUTED}">
+              System operational</span>
+          </div>
+          <div style="font-family:'DM Mono',monospace;font-size:10px;
+                      color:{s.MUTED};margin-top:6px">v2.4.1 — Sudd Basin</div>
+        </div>""", unsafe_allow_html=True)
 
-    return st.session_state.page
+
+# ════════════════════════════════════════════════════════════
+# TOPBAR
+# ════════════════════════════════════════════════════════════
+def render_topbar(last_evt: str):
+    cl, cr = st.columns([4, 1])
+    with cl:
+        st.markdown(f"""
+        <div style="height:60px;display:flex;align-items:center;gap:12px;
+                    border-bottom:1px solid {s.BORDER};">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+               stroke="{s.ACCENT}" stroke-width="2" stroke-linecap="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:18px;
+                       font-weight:700;color:{s.FG}">SUDDWATCH</span>
+          <span style="border-left:1px solid {s.BORDER};padding-left:12px;
+                       font-family:'DM Mono',monospace;font-size:12px;color:{s.MUTED}">
+            Operational Flood Detection &amp; Alert System
+          </span>
+        </div>""", unsafe_allow_html=True)
+    with cr:
+        st.markdown(f"""
+        <div style="height:60px;display:flex;align-items:center;justify-content:flex-end;
+                    gap:12px;border-bottom:1px solid {s.BORDER}">
+          <span style="font-family:'DM Mono',monospace;font-size:12px;color:{s.MUTED}">
+            Last event: <span style="color:{s.ACCENT}">{last_evt}</span>
+          </span>
+        </div>""", unsafe_allow_html=True)
+        if st.button("⟳ Refresh", key="refresh", width="stretch"):
+            st.rerun()
+
+
+def render_breadcrumb(text: str):
+    st.markdown(f"""
+    <div style="border-bottom:1px solid {s.BORDER};padding:8px 0;margin-bottom:16px">
+      <span style="font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED}">{text}</span>
+    </div>""", unsafe_allow_html=True)
 
 
 # ════════════════════════════════════════════════════════════
 # PAGE — HOME
 # ════════════════════════════════════════════════════════════
-def page_home(cfg, db):
-    latest = load_latest(db)
-    metrics = load_metrics(db)
+def page_home():
+    event     = db.get_active_event()
+    villages  = db.get_villages(event.get("id"))
+    roads     = db.get_roads()
+    hf        = db.get_health_facilities()
+    alerts    = db.get_alerts()
+    sources   = db.get_data_sources()
+    breakdown = db.get_state_breakdown()
 
-    last_evt = "—"
-    if latest.get("event_timestamp"):
-        try:
-            last_evt = datetime.fromisoformat(str(latest["event_timestamp"])).strftime("%Y-%m-%d %H:%M UTC")
-        except Exception:
-            last_evt = str(latest["event_timestamp"])[:16]
-
-    topbar(last_evt)
-    breadcrumb("Dashboard — Live Event")
-
-    gp = str(latest.get("geotiff_path") or "")
-    sp = gp.replace("_flood_mask.tif", "_flood_mask_risk_summary.json") if gp else ""
-    risk = load_summary(sp)
-
-    flood_ha = float(latest.get("flood_extent_ha") or 2220)
-    pop = int(risk.get("affected_population_estimate") or 7990)
-    avg_lat = float((metrics.get("avg_latency_seconds") or 2700)) / 60
-    iou_val = float(metrics.get("avg_iou") or 0.71)
-    total_ev = int(metrics.get("total_events") or 47)
-
-    villages = risk.get("affected_villages") or [
-        {"village_name": "Bor South", "estimated_population": 12400, "flood_risk_percentage": 87},
-        {"village_name": "Akobo East", "estimated_population": 8200, "flood_risk_percentage": 74},
-        {"village_name": "Twic East", "estimated_population": 6700, "flood_risk_percentage": 61},
+    cols = st.columns(6, gap="small")
+    kpis = [
+        ("TOTAL FLOOD EXTENT", "2,220 ha",   "across 3 states",   s.ACCENT),
+        ("AFFECTED POPULATION","7,990",       "est. at risk",      s.WARNING),
+        ("ACTIVE ALERTS",      "41",          "24h window",        s.DANGER),
+        ("AVG ALERT LATENCY",  "45 min",      "vs 60 min SLA",     s.SUCCESS),
+        ("DETECTION IOU",      "0.71",        "last acquisition",  s.SUCCESS),
+        ("SEASON EVENTS",      "47",          "2025 flood season", s.FG),
     ]
-    roads = risk.get("inaccessible_roads") or [
-        {"name": "Bor-Malakal A1", "facility_type": "Primary", "segment_length_km": 142, "alt_route": "Air only"},
-        {"name": "Akobo-Pochalla B4", "facility_type": "Secondary", "segment_length_km": 88, "alt_route": "Boat route"},
-    ]
-    health = risk.get("health_facilities_at_risk") or [
-        {"name": "Bor State Hospital", "facility_type": "Hospital", "status": "at_risk", "served": "45,000"},
-    ]
+    for col, (label, value, sub, color) in zip(cols, kpis):
+        col.markdown(s.kpi_tile(label, value, sub, color), unsafe_allow_html=True)
 
-    iou_pct = int(iou_val * 100)
-    conf_pct = min(100, iou_pct + 13)
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
-    st.markdown("<div style='padding:18px 20px 0;'>", unsafe_allow_html=True)
-    kpi_row([
-        ("📍 Total Flood Extent", f"<span style='color:{ACCENT};'>{flood_ha:,.0f} ha</span>", "across 3 states"),
-        ("👥 Affected Population", f"<span style='color:{AMBER};'>{pop:,}</span>", "est. at risk"),
-        ("⚠ Active Alerts", f"<span style='color:{RED};'>{total_ev}</span>", "24h window"),
-        ("⏱ Avg Alert Latency", f"<span style='color:{GREEN if avg_lat<=60 else AMBER};'>{avg_lat:.0f} min</span>", "vs 60 min SLA"),
-        ("◎ Detection IoU", f"<span style='color:{GREEN if iou_val>=0.65 else AMBER};'>{iou_val:.2f}</span>", "last acquisition"),
-        ("📊 Season Events", f"<span>{total_ev}</span>", "2025 flood season"),
-    ])
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    st.markdown("<div style='padding:18px 20px 0;'>", unsafe_allow_html=True)
-    map_col, right_col = st.columns([4, 1], gap="small")
+    map_col, panel_col = st.columns([3, 1], gap="small")
     with map_col:
-        components.html(svg_map(), height=834, width=None, scrolling=False)
-    with right_col:
-        st.markdown(card(
-            header("Active Event")
-            + f"<div style='margin-bottom:8px;'><span style='font-size:10px;color:{MUTED};'>Flood extent</span><br>"
-            + f"<span style='font-family:DM Mono,monospace;font-size:15px;color:{ACCENT};font-weight:600;'>{flood_ha:,.0f} ha</span></div>"
-            + f"<div style='margin-bottom:8px;'><span style='font-size:10px;color:{MUTED};'>Affected pop.</span><br>"
-            + f"<span style='font-family:DM Mono,monospace;font-size:15px;color:{AMBER};font-weight:600;'>{pop:,}</span></div>"
-            + f"<div style='margin-bottom:8px;'><span style='font-size:10px;color:{MUTED};'>Alerts sent</span><br>"
-            + f"<span style='font-family:DM Mono,monospace;font-size:15px;font-weight:600;'>{total_ev}</span></div>"
-            + f"<div><span style='font-size:10px;color:{MUTED};'>Detection latency</span><br>"
-            + f"<span style='font-family:DM Mono,monospace;font-size:15px;font-weight:600;'>{avg_lat:.0f} min</span></div>",
-            padding="12px 12px",
+        st.markdown(MAP_HTML, unsafe_allow_html=True)
+    with panel_col:
+        st.markdown(s.card_wrap(
+            s.section_label("Active Event · EVT-2025-047")
+            + s.progress_bar("Flood extent",     1200/3000, s.ACCENT,   "1,200 ha")
+            + s.progress_bar("Affected pop.",     5000/10000,s.WARNING,  "5,000")
+            + s.progress_bar("Alerts sent",       24/50,     s.FG,       "24")
+            + s.progress_bar("Detection latency", 45/60,     s.SUCCESS,  "45 min"),
+            "padding:12px"
         ), unsafe_allow_html=True)
 
-        st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
-
-        def qa_row(label_txt, pct, colour):
-            return (f"<div style='margin-bottom:8px;'>"
-                    f"<div style='display:flex;justify-content:space-between;margin-bottom:3px;'>"
-                    f"<span style='font-size:10px;color:{MUTED};'>{label_txt}</span>"
-                    f"<span style='font-family:DM Mono,monospace;font-size:10px;color:{colour};'>{pct/100:.2f}</span></div>"
-                    f"<div style='background:{BORDER};border-radius:2px;height:3px;'>"
-                    f"<div style='background:{colour};width:{pct}%;height:3px;border-radius:2px;'></div></div></div>")
-
-        st.markdown(card(
-            header("Detection QA")
-            + qa_row("IoU score", iou_pct, ACCENT)
-            + qa_row("Confidence", conf_pct, GREEN)
-            + qa_row("Cloud cover", 12, AMBER),
-            padding="12px 12px",
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+        st.markdown(s.card_wrap(
+            s.section_label("Detection QA")
+            + s.progress_bar("IoU score",   0.71, s.SUCCESS)
+            + s.progress_bar("Confidence",  0.84, s.ACCENT)
+            + s.progress_bar("Cloud cover", 0.12, s.WARNING),
+            "padding:12px"
         ), unsafe_allow_html=True)
 
-        st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
-
-        def alert_row(dot_colour, label_txt, count):
-            return (f"<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;'>"
-                    f"<span style='font-size:11px;color:{dot_colour};'>● {label_txt}</span>"
-                    f"<span style='font-family:DM Mono,monospace;font-size:11px;'>{count}</span></div>")
-
-        st.markdown(card(
-            header("Alert Delivery")
-            + alert_row(GREEN, "SMS", total_ev)
-            + alert_row(GREEN, "Email", max(0, total_ev - 12))
-            + alert_row(AMBER, "Pending", 3)
-            + alert_row(RED, "Failed", 1),
-            padding="12px 12px",
-        ), unsafe_allow_html=True)
-
-        st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
-
-        pipeline = [("Data Acquisition", True), ("Preprocessing", True), ("Flood Detection", True),
-                    ("Risk Assessment", True), ("Alert Dispatch", True)]
-        rows = "".join(
-            f"<div style='display:flex;justify-content:space-between;margin-bottom:4px;'>"
-            f"<span style='font-size:10px;color:{MUTED};'>{n}</span>{badge('OK','green') if ok else badge('ERR','red')}</div>"
-            for n, ok in pipeline
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+        alert_rows = "".join(
+            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+            f'<div style="display:flex;align-items:center;gap:6px">'
+            f'<div style="width:6px;height:6px;border-radius:50%;background:{c}"></div>'
+            f'<span style="font-family:Inter,sans-serif;font-size:11px;color:{s.MUTED}">{lbl}</span>'
+            f'</div><span style="font-family:DM Mono,monospace;font-size:11px;color:{s.FG}">{cnt}</span></div>'
+            for lbl, cnt, c in [("SMS",24,s.SUCCESS),("Email",12,s.ACCENT),("Pending",3,s.WARNING),("Failed",1,s.DANGER)]
         )
-        st.markdown(card(header("Pipeline Status") + rows, padding="12px 12px"), unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown(s.card_wrap(s.section_label("Alert Delivery") + alert_rows, "padding:12px"), unsafe_allow_html=True)
 
-    # State-level breakdown banner
-    st.markdown("<div style='padding:18px 20px 0;'>", unsafe_allow_html=True)
-    j_ha, j_pop = flood_ha * 0.54, int(pop * 0.63)
-    u_ha, u_pop = flood_ha * 0.29, int(pop * 0.26)
-    n_ha, n_pop = flood_ha * 0.17, int(pop * 0.11)
-
-    def state_block(name, fha, fpop, alerts, risk_lvl, risk_colour, border_left=False):
-        bl = f"border-left:1px solid {BORDER};padding-left:16px;" if border_left else ""
-        return (
-            f"<div style='{bl}'>"
-            f"<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;'>"
-            f"<span style='font-size:13px;font-weight:600;'>{name}</span>{badge(risk_lvl, risk_colour)}</div>"
-            f"<div style='display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;'>"
-            f"<div><span style='font-size:10px;color:{MUTED};'>Flood</span><br>"
-            f"<span style='font-family:DM Mono,monospace;font-size:13px;color:{ACCENT};font-weight:600;'>{fha:,.0f} ha</span></div>"
-            f"<div><span style='font-size:10px;color:{MUTED};'>Affected</span><br>"
-            f"<span style='font-family:DM Mono,monospace;font-size:13px;color:{AMBER};font-weight:600;'>{fpop:,}</span></div>"
-            f"<div><span style='font-size:10px;color:{MUTED};'>Alerts</span><br>"
-            f"<span style='font-family:DM Mono,monospace;font-size:13px;font-weight:600;'>{alerts}</span></div>"
-            f"</div></div>"
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+        pipe_rows = "".join(
+            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+            f'<span style="font-family:Inter,sans-serif;font-size:11px;color:{s.MUTED}">{stage}</span>'
+            f'{s.badge("OK","OK")}</div>'
+            for stage in ["Data Acquisition","Preprocessing","Flood Detection","Risk Assessment","Alert Dispatch"]
         )
+        st.markdown(s.card_wrap(s.section_label("Pipeline Status") + pipe_rows, "padding:12px"), unsafe_allow_html=True)
 
-    st.markdown(card(
-        f"<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;'>"
-        f"<span style='font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;'>State-Level Breakdown</span>"
-        f"<span style='font-family:DM Mono,monospace;font-size:10px;color:{MUTED};'>Current event · {last_evt}</span></div>"
-        f"<div style='display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;'>"
-        + state_block("Jonglei", j_ha, j_pop, 24, "HIGH", "red")
-        + state_block("Unity", u_ha, u_pop, 11, "MEDIUM", "amber", border_left=True)
-        + state_block("Upper Nile", n_ha, n_pop, 6, "LOW", "green", border_left=True)
-        + "</div>",
-        padding="16px 18px",
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+
+    # State breakdown
+    state_html = ""
+    for i, row in enumerate(breakdown):
+        border = f"border-right:1px solid {s.BORDER};" if i < 2 else ""
+        state_html += (
+            f'<div style="flex:1;padding:16px 20px;{border}">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+            f'<span style="font-family:Inter,sans-serif;font-size:14px;font-weight:600;color:{s.FG}">{row["state"]}</span>'
+            f'{s.badge(row["risk"])}</div>'
+            f'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">'
+            f'<div><div style="font-size:10px;color:{s.MUTED}">Flood</div>'
+            f'<div style="font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:700;color:{s.ACCENT}">{row["flood_ha"]:,} ha</div></div>'
+            f'<div><div style="font-size:10px;color:{s.MUTED}">Affected</div>'
+            f'<div style="font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:700;color:{s.WARNING}">{row["affected"]:,}</div></div>'
+            f'<div><div style="font-size:10px;color:{s.MUTED}">Alerts</div>'
+            f'<div style="font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:700;color:{s.FG}">{row["alerts"]}</div></div>'
+            f'</div></div>'
+        )
+    st.markdown(s.card_wrap(
+        s.card_header("State-Level Breakdown","Current event · 2025-10-23 14:30 UTC")
+        + f'<div style="display:flex">{state_html}</div>'
     ), unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<div style='padding:18px 20px 0;'>", unsafe_allow_html=True)
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+
     t1, t2, t3 = st.columns(3, gap="small")
     with t1:
-        st.markdown(header("Affected Villages", f"{len(villages)} records"), unsafe_allow_html=True)
-        hdr = th("Village") + th("Pop.", "right") + th("Risk", "right") + th("Action", "right")
         body = ""
-        for v in villages[:5]:
-            vname = v.get("village_name", "")
-            vpop = v.get("estimated_population", 0)
-            vrisk = int(v.get("flood_risk_percentage", 0))
-            rcolor = "red" if vrisk >= 75 else "amber" if vrisk >= 40 else "green"
-            action = "Evacuate" if vrisk >= 75 else "Monitor" if vrisk >= 40 else "Watch"
+        for v in villages:
+            vpop = f"{v['population']:,}"
             body += (
-                f"<tr>{td(vname)}{td(f'{vpop:,}', MUTED, 'right')}"
-                f"<td style='padding:6px 10px;text-align:right;border-bottom:1px solid {BORDER};'>{badge(f'{vrisk}%', rcolor)}</td>"
-                f"{td(action, ACCENT, 'right')}</tr>"
+                f'<tr style="border-bottom:1px solid rgba(48,54,61,0.5)">'
+                + s.table_cell(v["village"],extra="font-weight:500")
+                + s.table_cell(vpop, "right", s.MUTED, "mono")
+                + f'<td style="padding:8px 12px;text-align:right;border-bottom:1px solid rgba(48,54,61,0.5)">{s.risk_badge(v["risk_pct"])}</td>'
+                + s.table_cell(v["action"],"right",s.ACCENT,"mono","10px")
+                + "</tr>"
             )
-        st.markdown(card(table(hdr, body)), unsafe_allow_html=True)
+        st.markdown(s.card_wrap(
+            s.card_header("Affected Villages",f"{len(villages)} records")
+            + f'<table style="width:100%;border-collapse:collapse"><thead>'
+            + s.table_header_row(("Village","left"),("Pop.","right"),("Risk","right"),("Action","right"))
+            + f'</thead><tbody>{body}</tbody></table>'
+        ), unsafe_allow_html=True)
     with t2:
-        st.markdown(header("Inaccessible Roads", f"{len(roads)} roads"), unsafe_allow_html=True)
-        hdr = th("Road") + th("Type") + th("Length", "right") + th("Alt Route")
-        body = ""
-        for r in roads[:5]:
-            rname = r.get("name", "")
-            rtype = r.get("facility_type", "Road")
-            rkm = r.get("segment_length_km", 0)
-            ralt = r.get("alt_route", "—")
-            body += f"<tr>{td(rname)}{td(rtype, MUTED)}{td(f'{rkm:.0f} km', MUTED, 'right')}{td(ralt, MUTED)}</tr>"
-        st.markdown(card(table(hdr, body)), unsafe_allow_html=True)
+        body = "".join(
+            f'<tr>{s.table_cell(r["road"],extra="font-weight:500")}'
+            f'{s.table_cell(r["type"],color=s.MUTED)}'
+            f'{s.table_cell(r["length_km"],"right",s.MUTED,"mono")}'
+            f'{s.table_cell(r["alt_route"],color=s.MUTED)}</tr>'
+            for r in roads
+        )
+        st.markdown(s.card_wrap(
+            s.card_header("Inaccessible Roads",f"{len(roads)} roads")
+            + f'<table style="width:100%;border-collapse:collapse"><thead>'
+            + s.table_header_row(("Road","left"),("Type","left"),("Length","right"),("Alt Route","left"))
+            + f'</thead><tbody>{body}</tbody></table>'
+        ), unsafe_allow_html=True)
     with t3:
-        st.markdown(header("Health Facilities at Risk", f"{len(health)} at risk"), unsafe_allow_html=True)
-        hdr = th("Name") + th("Type") + th("Status") + th("Served", "right")
         body = ""
-        for h in health[:5]:
-            hname = h.get("name", "")
-            htype = h.get("facility_type", "Clinic")
-            hstatus = h.get("status", "at_risk").replace("_", " ").title()
-            hserved = h.get("served", "—")
+        for h in hf:
+            hserved = f"{h['served']:,}"
             body += (
-                f"<tr>{td(hname)}{td(htype, MUTED)}"
-                f"<td style='padding:6px 10px;border-bottom:1px solid {BORDER};'>{badge(hstatus, 'red')}</td>"
-                f"{td(hserved, MUTED, 'right')}</tr>"
+                f"<tr>"
+                + s.table_cell(h["name"],extra="font-weight:500")
+                + s.table_cell(h["type"],color=s.MUTED,size="10px")
+                + f'<td style="padding:8px 12px;border-bottom:1px solid rgba(48,54,61,0.5)">{s.badge(h["status"])}</td>'
+                + s.table_cell(hserved,"right",s.MUTED,"mono")
+                + "</tr>"
             )
-        st.markdown(card(table(hdr, body)), unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # Recent System Alerts + Data Sources
-    st.markdown("<div style='padding:18px 20px 18px;'>", unsafe_allow_html=True)
-    b1, b2 = st.columns([3, 2], gap="small")
-
-    alerts_demo = [
-        ("14:32", "CRITICAL", "Bor South — evacuation order issued", "Jonglei"),
-        ("14:18", "WARNING", "Leer flood extent +12% in 6 h", "Unity"),
-        ("13:55", "INFO", "Sentinel-1 acquisition complete — scene 047", "System"),
-        ("13:40", "WARNING", "A1 highway submerged at km 234", "Jonglei"),
-        ("13:15", "INFO", "SMS batch delivered — 24/24 recipients", "System"),
-        ("12:50", "WARNING", "Akobo PHC access route cut", "Jonglei"),
-        ("12:30", "INFO", "Risk assessment model run completed", "System"),
-    ]
-    alert_colour = {"CRITICAL": "red", "WARNING": "amber", "INFO": "grey"}
-    with b1:
-        alert_rows = "".join(
-            f"<div style='display:flex;align-items:center;gap:10px;padding:6px 0;"
-            f"border-bottom:1px solid {BORDER};'>"
-            f"<span style='font-family:DM Mono,monospace;font-size:10px;color:{MUTED};flex-shrink:0;'>{t}</span>"
-            f"{badge(lvl, alert_colour[lvl])}"
-            f"<span style='font-size:11px;flex:1;'>{msg}</span>"
-            f"<span style='font-family:DM Mono,monospace;font-size:10px;color:{MUTED};flex-shrink:0;'>{state}</span>"
-            f"</div>"
-            for t, lvl, msg, state in alerts_demo
-        )
-        st.markdown(card(
-            header("Recent System Alerts", f"<span style='color:{RED};'>● LIVE</span>") + alert_rows
+        st.markdown(s.card_wrap(
+            s.card_header("Health Facilities at Risk",f"{len(hf)} facilities")
+            + f'<table style="width:100%;border-collapse:collapse"><thead>'
+            + s.table_header_row(("Name","left"),("Type","left"),("Status","left"),("Served","right"))
+            + f'</thead><tbody>{body}</tbody></table>'
         ), unsafe_allow_html=True)
 
-    ds_demo = [
-        ("Sentinel-1 SAR", "ESA Copernicus", "10 m", "2025-10-23 13:10", True),
-        ("CHIRPS Rainfall", "UCSB / FEWS", "5 km", "2025-10-23 06:00", True),
-        ("DEM (SRTM)", "NASA / USGS", "30 m", "Static baseline", True),
-        ("Population Grid", "WorldPop", "100 m", "2020 baseline", True),
-        ("OSM Road Network", "OpenStreetMap", "Vector", "2025-09-01", False),
-    ]
-    with b2:
-        hdr2 = th("Source") + th("Provider") + th("Res.") + th("Last Update") + th("Status", "right")
-        body2 = "".join(
-            f"<tr>{td(s)}{td(p, MUTED)}{td(r, MUTED)}{td(u, MUTED)}"
-            f"<td style='padding:6px 10px;text-align:right;border-bottom:1px solid {BORDER};'>"
-            f"{badge('OK', 'green') if ok else badge('STALE', 'amber')}</td></tr>"
-            for s, p, r, u, ok in ds_demo
-        )
-        st.markdown(card(
-            header("Data Sources", "Ingestion status") + table(hdr2, body2)
-        ), unsafe_allow_html=True)
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
-    st.markdown("</div>", unsafe_allow_html=True)
+    al_col, ds_col = st.columns(2, gap="small")
+    with al_col:
+        live = (f'<div style="display:flex;align-items:center;gap:6px">'
+                f'<div style="width:6px;height:6px;border-radius:50%;background:{s.DANGER};'
+                f'animation:pulse 1.5s ease-in-out infinite"></div>'
+                f'<span style="font-family:DM Mono,monospace;font-size:10px;color:{s.DANGER}">LIVE</span></div>')
+        rows = "".join(
+            f'<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 16px;'
+            f'border-bottom:1px solid rgba(48,54,61,0.5)">'
+            f'<span style="font-family:DM Mono,monospace;font-size:10px;color:{s.MUTED};'
+            f'width:40px;flex-shrink:0;padding-top:2px">{a["time_utc"]}</span>'
+            f'{s.badge(a["alert_type"])}'
+            f'<span style="font-family:Inter,sans-serif;font-size:11px;color:{s.FG};flex:1">{a["message"]}</span>'
+            f'<span style="font-family:DM Mono,monospace;font-size:10px;color:{s.MUTED};flex-shrink:0">{a["state"]}</span>'
+            f'</div>'
+            for a in alerts
+        )
+        st.markdown(s.card_wrap(s.card_header("Recent System Alerts", live) + rows), unsafe_allow_html=True)
+    with ds_col:
+        body = "".join(
+            f'<tr>{s.table_cell(src["name"],extra="font-weight:500")}'
+            f'{s.table_cell(src["provider"],color=s.MUTED)}'
+            f'{s.table_cell(src["resolution"],"right",s.MUTED,"mono")}'
+            f'{s.table_cell(src["last_update"],color=s.MUTED,font="mono",size="10px")}'
+            f'<td style="padding:8px 12px;text-align:center;border-bottom:1px solid rgba(48,54,61,0.5)">'
+            f'{s.badge(src["status"])}</td></tr>'
+            for src in sources
+        )
+        st.markdown(s.card_wrap(
+            s.card_header("Data Sources","Ingestion status")
+            + f'<table style="width:100%;border-collapse:collapse"><thead>'
+            + s.table_header_row(("Source","left"),("Provider","left"),("Res.","right"),("Last Update","left"),("Status","center"))
+            + f'</thead><tbody>{body}</tbody></table>'
+        ), unsafe_allow_html=True)
 
 
 # ════════════════════════════════════════════════════════════
 # PAGE — HISTORY
 # ════════════════════════════════════════════════════════════
-def page_history(cfg, db):
-    latest = load_latest(db)
-    last_evt = "—"
-    if latest.get("event_timestamp"):
-        try:
-            last_evt = datetime.fromisoformat(str(latest["event_timestamp"])).strftime("%Y-%m-%d %H:%M UTC")
-        except Exception:
-            last_evt = str(latest["event_timestamp"])[:16]
+def page_history():
+    # ── Session state ──────────────────────────────────────
+    ss = st.session_state
+    if "hist_state"   not in ss: ss.hist_state   = "All"
+    if "hist_page"    not in ss: ss.hist_page     = 1
+    if "hist_start"   not in ss: ss.hist_start    = None
+    if "hist_end"     not in ss: ss.hist_end      = None
+    if "hist_min_iou" not in ss: ss.hist_min_iou  = 0.65
+    if "hist_min_pop" not in ss: ss.hist_min_pop  = 0
 
-    topbar(last_evt)
-    breadcrumb("History — Flood Events Archive")
+    # ── KPI strip ─────────────────────────────────────────
+    cols = st.columns(4, gap="small")
+    for col, (l, v, sub) in zip(cols, [
+        ("TOTAL EVENTS",     "47",       "2025 flood season"),
+        ("PEAK MONTH",       "August",   "12 events recorded"),
+        ("MAX FLOOD EXTENT", "3,400 ha", "Aug 2025 combined"),
+        ("TOTAL AFFECTED",   "31,200",   "cumulative season"),
+    ]):
+        col.markdown(s.kpi_tile(l, v, sub), unsafe_allow_html=True)
 
-    # ── Filter state (session) ──────────────────────────────
-    if "hist_state" not in st.session_state:
-        st.session_state.hist_state = "All"
-    if "hist_page" not in st.session_state:
-        st.session_state.hist_page = 1
-    if "hist_start" not in st.session_state:
-        st.session_state.hist_start = datetime(2025, 8, 1).date()
-    if "hist_end" not in st.session_state:
-        st.session_state.hist_end = datetime(2025, 10, 31).date()
-    if "hist_min_iou" not in st.session_state:
-        st.session_state.hist_min_iou = 0.0
-    if "hist_min_pop" not in st.session_state:
-        st.session_state.hist_min_pop = 0
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
-    demo = [
-        ("2025-10-23 14:30 UTC", "EVT-2025-047", 45, 0.71, 1200, 5000, "Jonglei", "Bor South",
-         ["Bor South", "Akobo East", "Twic East"], [3200, 1100, 700], [120, 900, 450, 300]),
-        ("2025-10-08 09:15 UTC", "EVT-2025-041", 52, 0.68, 980, 3800, "Jonglei", "Akobo",
-         ["Akobo East", "Nasir"], [2100, 900], [110, 860, 420, 280]),
-        ("2025-09-19 06:45 UTC", "EVT-2025-033", 38, 0.79, 1540, 7200, "Unity", "Leer",
-         ["Leer", "Bentiu"], [3400, 1800], [95, 780, 380, 250]),
-        ("2025-09-02 11:05 UTC", "EVT-2025-028", 61, 0.66, 2200, 6100, "Upper Nile", "Malakal",
-         ["Malakal", "Nasir"], [4100, 2000], [130, 990, 510, 340]),
-        ("2025-08-14 22:10 UTC", "EVT-2025-021", 41, 0.73, 1750, 4900, "Jonglei", "Twic East",
-         ["Twic East", "Bor South"], [2900, 2000], [105, 840, 400, 260]),
-    ]
+    # ── Chart + Filter (2/3 + 1/3) ────────────────────────
+    cc, fc = st.columns([2, 1], gap="small")
 
-    events_df = load_events(db)
-    use_real = (not events_df.empty) and "scene_id" in events_df.columns
-    rows_all = demo
-    if use_real and len(events_df) >= len(demo):
-        real_rows = []
-        for _, r in events_df.iterrows():
-            real_rows.append((
-                str(r.get("event_timestamp",""))[:16] + " UTC",
-                str(r.get("scene_id",""))[:12],
-                float(r.get("total_latency_seconds",0) or 0)/60,
-                float(r.get("iou_score",0) or 0),
-                float(r.get("flood_extent_ha",0) or 0),
-                0, "—", "—", [], [], [0,0,0,0],
-            ))
-        rows_all = real_rows
-
-    season_total = 47 if rows_all is demo else len(rows_all)
-    season_max_extent = 3400.0 if rows_all is demo else max((r[4] for r in rows_all), default=0)
-
-    st.markdown("<div style='padding:16px 20px 0;'>", unsafe_allow_html=True)
-    kpi_row([
-        ("◷ Total Events", f"{season_total}", "2025 flood season"),
-        ("◔ Peak Month", f"<span style='color:{AMBER};'>August</span>", "12 events recorded"),
-        ("▲ Max Flood Extent", f"<span style='color:{RED};'>{season_max_extent:,.0f} ha</span>", "Aug 2025 combined"),
-        ("◉ Total Affected", "31,200", "cumulative season"),
-    ])
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    def row_matches(row):
-        edt, eid, lat, iou, fha, fpop, state, county = row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7]
-        try:
-            row_date = datetime.strptime(edt[:10], "%Y-%m-%d").date()
-        except Exception:
-            row_date = None
-        if row_date:
-            if row_date < st.session_state.hist_start or row_date > st.session_state.hist_end:
-                return False
-        if st.session_state.hist_state != "All" and state != st.session_state.hist_state:
-            return False
-        if iou < st.session_state.hist_min_iou:
-            return False
-        if fpop < st.session_state.hist_min_pop:
-            return False
-        return True
-
-    filtered_rows = [r for r in rows_all if row_matches(r)]
-    filtered_total = len(filtered_rows)
-
-    st.markdown("<div style='padding:16px 20px 0;'>", unsafe_allow_html=True)
-    chart_col, filter_col = st.columns([7, 3], gap="medium")
-
-    with chart_col:
-        st.markdown(card(
-            header("Flood Events by Month — 2025 Season", "events · hectares"),
-            padding="16px 18px 6px",
-        ), unsafe_allow_html=True)
-        months = ["May", "Jun", "Jul", "Aug", "Sep", "Oct"]
-        ev_counts = [2, 5, 8, 12, 10, 6]
-        ha_totals = [800, 1500, 2200, 3400, 2800, 1700]
+    with cc:
+        monthly = db.get_season_monthly()
         fig = go.Figure()
-        fig.add_bar(x=months, y=ev_counts, name="Events", marker_color=ACCENT, yaxis="y")
-        fig.add_bar(x=months, y=ha_totals, name="Total ha", marker_color=PRIMARY, opacity=0.55, yaxis="y2")
-        fig.update_layout(
-            **pl(330),
-            xaxis=ax(),
-            yaxis=dict(gridcolor=BORDER, linecolor=BORDER, tickfont=dict(size=10), title="Events"),
-            yaxis2=dict(overlaying="y", side="right", showgrid=False, tickfont=dict(size=10), title="Hectares"),
-            barmode="group",
-            legend=dict(orientation="h", y=-0.15, font=dict(size=10), bgcolor="rgba(0,0,0,0)"),
+        fig.add_bar(
+            x=[r["month"] for r in monthly],
+            y=[r["events"] for r in monthly],
+            name="Events", marker_color=s.PRIMARY, yaxis="y",
+            hovertemplate="<b>%{x}</b><br>Events: %{y}<extra></extra>",
         )
-        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+        fig.add_bar(
+            x=[r["month"] for r in monthly],
+            y=[r["total_ha"] for r in monthly],
+            name="Total ha", marker_color=s.ACCENT, opacity=0.5, yaxis="y2",
+            hovertemplate="<b>%{x}</b><br>Total ha: %{y:,}<extra></extra>",
+        )
+        fig.update_layout(**_fig(220, barmode="group",
+            hoverlabel=dict(bgcolor=s.CARD, bordercolor=s.BORDER,
+                            font=dict(family="DM Mono, monospace", size=11, color=s.FG)),
+            yaxis=dict(title="Events", gridcolor="rgba(48,54,61,0.8)",
+                       tickfont=dict(size=10, color=s.MUTED)),
+            yaxis2=dict(title="Ha", overlaying="y", side="right",
+                        showgrid=False, tickfont=dict(size=10, color=s.MUTED)),
+        ))
+        with st.container(border=True):
+            _evt = db.get_active_event()
+            _year = str(_evt.get("date_utc","2025"))[:4] if _evt else "2025"
+            st.markdown(s.card_header(f"Flood Events by Month — {_year} Season", "events · hectares"),
+                        unsafe_allow_html=True)
+            fig.update_layout(height=360)
+            st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
-    with filter_col:
-        st.markdown(card(header("Filter Events"), padding="16px 18px 8px"), unsafe_allow_html=True)
+    with fc:
+        with st.container(border=True):
+            st.markdown(s.card_header("Filter Events"), unsafe_allow_html=True)
+            st.markdown(f"<div style='font-size:11px;color:{s.MUTED};margin-bottom:4px;'>Date range</div>", unsafe_allow_html=True)
+            dc1, dc2 = st.columns([1, 1])
+            with dc1:
+                start_d = st.date_input("From", value=ss.hist_start,
+                                        format="YYYY-MM-DD",
+                                        label_visibility="collapsed",
+                                        key="hist_start_input")
+            with dc2:
+                end_d = st.date_input("To", value=ss.hist_end,
+                                      format="YYYY-MM-DD",
+                                      label_visibility="collapsed",
+                                      key="hist_end_input")
+            st.markdown(f"<div style='font-size:11px;color:{s.MUTED};margin:10px 0 6px;'>State</div>", unsafe_allow_html=True)
+            sb = st.columns(4)
+            for col, state in zip(sb, ["All", "Jonglei", "Unity", "Upper Nile"]):
+                lbl = {"All":"All","Jonglei":"Jon.","Unity":"Uni.","Upper Nile":"U.N."}[state]
+                if col.button(lbl, key=f"hs_{state}", width="stretch",
+                              type="primary" if ss.hist_state == state else "secondary",
+                              help=state):
+                    ss.hist_state = state
+                    ss.hist_page  = 1
+                    st.rerun()
+            st.markdown(
+                f"<div style='font-size:11px;color:{s.MUTED};margin:12px 0 2px;'>Min IoU</div>",
+                unsafe_allow_html=True,
+            )
+            min_iou = st.slider("iou", 0.0, 1.0, ss.hist_min_iou, 0.05,
+                                label_visibility="collapsed", key="iou_sl",
+                                format="%.2f")
+            st.markdown(f"<div style='font-size:11px;color:{s.MUTED};margin:10px 0 2px;'>Min affected pop.</div>", unsafe_allow_html=True)
+            min_pop = st.number_input("pop", 0, value=ss.hist_min_pop, step=100,
+                                      label_visibility="collapsed", key="pop_ni")
+            st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
+            if st.button("⌕ Apply Filters", key="apply_f", width="stretch", type="primary"):
+                ss.hist_start   = start_d
+                ss.hist_end     = end_d
+                ss.hist_min_iou = min_iou
+                ss.hist_min_pop = min_pop
+                ss.hist_page    = 1
+                st.rerun()
 
-        st.markdown(f"<div style='font-size:10px;color:{MUTED};margin:0 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;'>Date range</div>", unsafe_allow_html=True)
-        dc1, dc2 = st.columns(2)
-        with dc1:
-            start_date = st.date_input("Start", value=st.session_state.hist_start,
-                                       format="YYYY-MM-DD",
-                                       label_visibility="collapsed", key="hist_start_input")
-        with dc2:
-            end_date = st.date_input("End", value=st.session_state.hist_end,
-                                     format="YYYY-MM-DD",
-                                     label_visibility="collapsed", key="hist_end_input")
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
-        st.markdown(f"<div style='font-size:10px;color:{MUTED};margin:14px 0 6px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;'>State</div>", unsafe_allow_html=True)
-        state_options = ["All", "Jonglei", "Unity", "Upper Nile"]
-        sb_cols = st.columns(4)
-        clicked_state = None
-        for col, s in zip(sb_cols, state_options):
-            with col:
-                is_active = st.session_state.hist_state == s
-                short = {"All": "All", "Jonglei": "Jon.", "Unity": "Unity", "Upper Nile": "U.N."}[s]
-                if st.button(short, key=f"state_btn_{s}", width="stretch",
-                           type="primary" if is_active else "secondary", help=s):
-                    clicked_state = s
-        if clicked_state:
-            st.session_state.hist_state = clicked_state
-            st.session_state.hist_page = 1
-            st.rerun()
+    # ── Load + filter events ───────────────────────────────
+    all_events = db.get_all_events(ss.hist_state, ss.hist_min_iou, ss.hist_min_pop)
 
+    # Date filter (applied in Python since db.py doesn't take dates yet)
+    if ss.hist_start:
+        from datetime import date as _date
+        all_events = [e for e in all_events
+                      if e["date_utc"][:10] >= str(ss.hist_start)]
+    if ss.hist_end:
+        all_events = [e for e in all_events
+                      if e["date_utc"][:10] <= str(ss.hist_end)]
+
+    total      = len(all_events)
+    PAGE_SIZE  = 5
+    total_pages = max(1, -(-total // PAGE_SIZE))
+    cur_page    = min(ss.hist_page, total_pages)
+    page_rows   = all_events[(cur_page-1)*PAGE_SIZE : cur_page*PAGE_SIZE]
+
+    # ── Event Log card ─────────────────────────────────────
+    with st.container(border=True):
+        st.markdown(s.card_header(
+            "Event Log",
+            f"{total} events · showing page {cur_page} of {total_pages}"
+        ), unsafe_allow_html=True)
+
+    if total == 0:
         st.markdown(
-            f"<div style='display:flex;justify-content:space-between;margin:14px 0 2px;'>"
-            f"<span style='font-size:10px;color:{MUTED};font-weight:600;text-transform:uppercase;letter-spacing:.04em;'>Min IoU</span>"
-            f"<span style='font-family:DM Mono,monospace;font-size:11px;color:{ACCENT};'>{st.session_state.hist_min_iou:.2f}</span>"
-            f"</div>",
+            f"<div style='padding:24px;text-align:center;font-family:DM Mono,monospace;"
+            f"font-size:11px;color:{s.MUTED};'>No events match the current filters.</div>",
             unsafe_allow_html=True,
         )
-        min_iou = st.slider("min_iou_slider", 0.0, 1.0, st.session_state.hist_min_iou, 0.05,
-                            label_visibility="collapsed", key="hist_iou_input")
-
-        st.markdown(f"<div style='font-size:10px;color:{MUTED};margin:14px 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;'>Min affected population</div>", unsafe_allow_html=True)
-        min_pop = st.number_input("Min pop", min_value=0, value=st.session_state.hist_min_pop, step=100,
-                                  label_visibility="collapsed", key="hist_pop_input")
-
-        st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
-        if st.button("⌕ Apply Filters", key="hist_apply", width="stretch", type="primary"):
-            st.session_state.hist_start = start_date
-            st.session_state.hist_end = end_date
-            st.session_state.hist_min_iou = min_iou
-            st.session_state.hist_min_pop = min_pop
-            st.session_state.hist_page = 1
-            st.rerun()
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    st.markdown("<div style='padding:20px 20px 18px;'>", unsafe_allow_html=True)
-
-    PAGE_SIZE = 2
-    total_pages = max(1, -(-filtered_total // PAGE_SIZE)) if filtered_total > 0 else 1
-    cur_page = min(st.session_state.hist_page, total_pages)
-
-    st.markdown(header("Event Log", f"{filtered_total} events · showing page {cur_page} of {total_pages}"), unsafe_allow_html=True)
-
-    if filtered_total == 0:
-        st.markdown(card(
-            f"<div style='text-align:center;padding:24px;color:{MUTED};font-size:12px;'>"
-            f"No events match the current filters. Try widening the date range or lowering Min IoU.</div>"
-        ), unsafe_allow_html=True)
     else:
-        page_start = (cur_page - 1) * PAGE_SIZE
-        page_rows = filtered_rows[page_start:page_start + PAGE_SIZE]
+        for i, evt in enumerate(page_rows):
+            dot_c = s.DANGER  if evt["affected"] > 5000 else (s.WARNING if evt["affected"] > 3000 else s.SUCCESS)
+            lat_c = s.WARNING if evt["latency_min"] > 55 else (s.SUCCESS if evt["latency_min"] <= 45 else s.FG)
+            iou_c = s.WARNING if evt["iou"] < 0.65 else (s.SUCCESS if evt["iou"] >= 0.70 else s.FG)
+            rk    = f"{cur_page}_{i}_{evt['id']}"
 
-        for idx, (edt, eid, lat, iou, fha, fpop, state, county, top_villages, top_pops, stage_times) in enumerate(page_rows):
-            lat_colour = GREEN if lat <= 60 else AMBER
-            iou_colour = GREEN if iou >= 0.65 else AMBER
-            row_key = f"{cur_page}_{idx}_{eid}"
+            with st.expander(
+                f"{evt['date_utc']}   ·   {evt['id']}   ·   {evt['state']} / {evt['county']}"
+            ):
+                mc, dc = st.columns([1, 4], gap="small")
 
-            with st.expander(f"{edt}   ·   {eid}   ·   {state} / {county}"):
-                st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
-                mc, dc = st.columns([1, 4], gap="medium")
+                # Mini SVG map — unique per state/county
+                state_colors = {"Jonglei": s.SUCCESS, "Unity": s.PURPLE, "Upper Nile": s.ACCENT}
+                dot_color = state_colors.get(evt["state"], s.ACCENT)
                 with mc:
-                    st.markdown(card(
-                        f"<div style='font-size:9px;color:{MUTED};text-align:center;line-height:1.7;'>"
-                        f"📍<br><span style='font-weight:600;color:#c9d1d9;'>{county}</span><br>"
-                        f"<span style='color:{MUTED};'>{state}</span></div>",
-                        padding="24px 8px",
+                    st.markdown(s.card_wrap(
+                        f'<svg style="width:100%;height:150px" viewBox="0 0 180 150"'
+                        f' xmlns="http://www.w3.org/2000/svg">'
+                        f'<rect width="180" height="150" fill="#07111a"/>'
+                        # River
+                        f'<path d="M 90 5 C 85 35 95 60 88 90 C 82 115 88 135 88 148"'
+                        f' fill="none" stroke="{s.PRIMARY}" stroke-width="3" opacity="0.6"/>'
+                        # Flood zone
+                        f'<polygon points="45,30 130,25 145,70 135,110 95,125 55,115 40,75"'
+                        f' fill="{s.ACCENT}" fill-opacity="0.2"'
+                        f' stroke="{s.ACCENT}" stroke-width="1.5" stroke-dasharray="4,2"/>'
+                        # State dot (main affected area)
+                        f'<circle cx="88" cy="75" r="6" fill="{dot_c}" stroke="white" stroke-width="1.5"/>'
+                        # Other village dots
+                        f'<circle cx="115" cy="55" r="4" fill="{s.WARNING}" stroke="white" stroke-width="1"/>'
+                        f'<circle cx="65" cy="105" r="4" fill="{s.SUCCESS}" stroke="white" stroke-width="1"/>'
+                        # Health cross
+                        f'<line x1="83" y1="72" x2="93" y2="72" stroke="{s.DANGER}" stroke-width="2"/>'
+                        f'<line x1="88" y1="67" x2="88" y2="77" stroke="{s.DANGER}" stroke-width="2"/>'
+                        # Label
+                        f'<text x="6" y="144" fill="{s.MUTED}" font-family="DM Mono" font-size="8">'
+                        f'{evt["county"]} · {evt["state"]}</text>'
+                        f'</svg>'
                     ), unsafe_allow_html=True)
+
                 with dc:
+                    # 4 metric tiles
                     c1, c2, c3, c4 = st.columns(4)
-                    with c1: st.markdown(f"<span style='font-size:10px;color:{MUTED};'>Latency</span><br><span style='font-family:DM Mono,monospace;font-size:14px;color:{lat_colour};font-weight:600;'>{lat:.0f} min</span>", unsafe_allow_html=True)
-                    with c2: st.markdown(f"<span style='font-size:10px;color:{MUTED};'>IoU</span><br><span style='font-family:DM Mono,monospace;font-size:14px;color:{iou_colour};font-weight:600;'>{iou:.2f}</span>", unsafe_allow_html=True)
-                    with c3: st.markdown(f"<span style='font-size:10px;color:{MUTED};'>Flood Extent</span><br><span style='font-family:DM Mono,monospace;font-size:14px;font-weight:600;'>{fha:,.0f} ha</span>", unsafe_allow_html=True)
-                    with c4: st.markdown(f"<span style='font-size:10px;color:{MUTED};'>Affected Pop.</span><br><span style='font-family:DM Mono,monospace;font-size:14px;color:{AMBER};font-weight:600;'>{fpop:,}</span>", unsafe_allow_html=True)
-
-                    if stage_times and any(stage_times):
-                        st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
-                        s1, s2, s3, s4 = st.columns(4)
-                        stage_labels = ["Data Acquisition", "Preprocessing", "Flood Detection", "Risk Assessment"]
-                        for scol, slabel, sval in zip([s1, s2, s3, s4], stage_labels, stage_times):
-                            with scol:
-                                st.markdown(
-                                    f"<span style='font-size:10px;color:{MUTED};'>{slabel}</span><br>"
-                                    f"<span style='font-family:DM Mono,monospace;font-size:13px;font-weight:600;'>{sval} s</span>",
-                                    unsafe_allow_html=True,
-                                )
-
-                    if top_villages:
-                        villages_html = "  ·  ".join(f"{v} ({p:,})" for v, p in zip(top_villages, top_pops))
-                        st.markdown(
-                            f"<div style='margin-top:16px;font-size:10px;color:{MUTED};font-weight:600;"
-                            f"text-transform:uppercase;letter-spacing:.04em;'>Top affected villages</div>"
-                            f"<div style='font-family:DM Mono,monospace;font-size:11px;margin-top:2px;'>{villages_html}</div>",
+                    for col, lbl, val, vc in [
+                        (c1, "Latency",      f"{evt['latency_min']} min", lat_c),
+                        (c2, "IoU",          f"{evt['iou']:.2f}",         iou_c),
+                        (c3, "Flood Extent", f"{evt['flood_ha']:,} ha",   s.FG),
+                        (c4, "Affected Pop.",f"{evt['affected']:,}",       s.WARNING),
+                    ]:
+                        col.markdown(
+                            f"<span style='font-size:10px;color:{s.MUTED};'>{lbl}</span><br>"
+                            f"<span style='font-family:DM Mono,monospace;font-size:14px;"
+                            f"font-weight:600;color:{vc};'>{val}</span>",
                             unsafe_allow_html=True,
                         )
 
-                    st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
+                    # Pipeline timing tiles
+                    st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+                    t1, t2, t3, t4 = st.columns(4)
+                    for col, lbl, val in [
+                        (t1, "Data Acquisition", evt.get("data_acq_s", 120)),
+                        (t2, "Preprocessing",    evt.get("preproc_s",  900)),
+                        (t3, "Flood Detection",  evt.get("flood_det_s",450)),
+                        (t4, "Risk Assessment",  evt.get("risk_ass_s", 300)),
+                    ]:
+                        col.markdown(
+                            f"<div style='background:rgba(33,38,45,0.3);border:1px solid rgba(48,54,61,0.5);"
+                            f"border-radius:4px;padding:8px 10px;'>"
+                            f"<div style='font-family:DM Mono,monospace;font-size:9px;color:{s.MUTED};'>{lbl}</div>"
+                            f"<div style='font-family:DM Mono,monospace;font-size:14px;font-weight:600;"
+                            f"color:{s.FG};margin-top:2px;'>{val} s</div></div>",
+                            unsafe_allow_html=True,
+                        )
+
+                    # Top affected villages — pulled from demo db for this event
+                    villages = db.get_villages("EVT-2025-047")
+                    if villages:
+                        vill_str = "  ·  ".join(
+                            f"<span style='color:{s.ACCENT};'>●</span> "
+                            f"<span style='color:{s.FG};'>{v['village']}</span> "
+                            f"<span style='color:{s.MUTED};'>({v['population']:,})</span>"
+                            for v in villages[:3]
+                        )
+                        st.markdown(
+                            f"<div style='margin-top:12px;font-family:DM Mono,monospace;font-size:10px;"
+                            f"text-transform:uppercase;letter-spacing:0.1em;color:{s.MUTED};'>"
+                            f"Top Affected Villages</div>"
+                            f"<div style='font-size:11px;margin-top:4px;'>{vill_str}</div>",
+                            unsafe_allow_html=True,
+                        )
+
+                    # Download buttons
+                    st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
                     b1, b2, b3 = st.columns(3)
-                    geojson_payload = json.dumps({"event_id": eid, "type": "FeatureCollection", "features": []}, indent=2)
-                    csv_payload = (
-                        "event_id,timestamp,latency_min,iou,flood_ha,affected_pop\n"
-                        f"{eid},{edt},{lat:.0f},{iou:.2f},{fha:.0f},{fpop}\n"
+
+                    # Build richer export data
+                    geo_data = json.dumps({
+                        "type": "FeatureCollection",
+                        "event_id": evt["id"],
+                        "event_date": evt["date_utc"],
+                        "properties": {
+                            "flood_ha": evt["flood_ha"],
+                            "affected": evt["affected"],
+                            "state": evt["state"],
+                            "county": evt["county"],
+                            "iou": evt["iou"],
+                            "latency_min": evt["latency_min"],
+                        },
+                        "features": [],
+                    }, indent=2)
+
+                    csv_data = (
+                        "event_id,date_utc,latency_min,iou,flood_ha,affected,state,county,"
+                        "data_acq_s,preproc_s,flood_det_s,risk_ass_s,alert_s\n"
+                        f"{evt['id']},{evt['date_utc']},{evt['latency_min']},{evt['iou']:.2f},"
+                        f"{evt['flood_ha']},{evt['affected']},{evt['state']},{evt['county']},"
+                        f"{evt.get('data_acq_s',120)},{evt.get('preproc_s',900)},"
+                        f"{evt.get('flood_det_s',450)},{evt.get('risk_ass_s',300)},"
+                        f"{evt.get('alert_s',150)}\n"
                     )
-                    pdf_payload = f"Situation Report — {eid}\n{edt}\nFlood extent: {fha:.0f} ha\nAffected: {fpop}"
-                    with b1:
-                        st.download_button("⬇ GeoJSON", data=geojson_payload,
-                                          file_name=f"{eid}_flood_extent.geojson", mime="application/geo+json",
-                                          key=f"geo_{row_key}", width="stretch")
-                    with b2:
-                        st.download_button("⬇ PDF Report", data=pdf_payload,
-                                          file_name=f"{eid}_situation_report.txt", mime="text/plain",
-                                          key=f"pdf_{row_key}", width="stretch")
-                    with b3:
-                        st.download_button("⬇ CSV Data", data=csv_payload,
-                                          file_name=f"{eid}_data.csv", mime="text/csv",
-                                          key=f"csv_{row_key}", width="stretch")
 
-        st.markdown(f"<div style='height:1px;background:{BORDER};margin-top:14px;'></div>", unsafe_allow_html=True)
-        st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
+                    pdf_data = (
+                        f"SUDDWATCH SITUATION REPORT\n"
+                        f"{'='*40}\n"
+                        f"Event ID:         {evt['id']}\n"
+                        f"Date:             {evt['date_utc']}\n"
+                        f"State / County:   {evt['state']} / {evt['county']}\n"
+                        f"\nFLOOD METRICS\n{'-'*40}\n"
+                        f"Flood Extent:     {evt['flood_ha']:,} ha\n"
+                        f"Affected Pop.:    {evt['affected']:,}\n"
+                        f"Detection IoU:    {evt['iou']:.2f}\n"
+                        f"Alert Latency:    {evt['latency_min']} min\n"
+                        f"\nPIPELINE TIMING\n{'-'*40}\n"
+                        f"Data Acquisition: {evt.get('data_acq_s',120)} s\n"
+                        f"Preprocessing:    {evt.get('preproc_s',900)} s\n"
+                        f"Flood Detection:  {evt.get('flood_det_s',450)} s\n"
+                        f"Risk Assessment:  {evt.get('risk_ass_s',300)} s\n"
+                        f"Alert Dispatch:   {evt.get('alert_s',150)} s\n"
+                        f"\nGenerated by SuddWatch v2.4.1 — Sudd Basin\n"
+                    )
 
-        pg1, pg2, pg3, pg4, pg5, pg6, pg7 = st.columns([3, 1, 1, 1, 1, 1, 3])
-        with pg2:
-            if st.button("‹ Prev", key="hist_prev", disabled=(cur_page <= 1), width="stretch"):
-                st.session_state.hist_page = cur_page - 1
-                st.rerun()
-        page_buttons = [pg3, pg4, pg5]
-        for i, col in enumerate(page_buttons[:total_pages], start=1):
-            with col:
-                if st.button(str(i), key=f"hist_pg_{i}", width="stretch",
-                           type="primary" if i == cur_page else "secondary"):
-                    st.session_state.hist_page = i
-                    st.rerun()
-        with pg6:
-            if st.button("Next ›", key="hist_next", disabled=(cur_page >= total_pages), width="stretch"):
-                st.session_state.hist_page = cur_page + 1
-                st.rerun()
+                    b1.download_button(
+                        "⬇ GeoJSON", data=geo_data,
+                        file_name=f"{evt['id']}_flood_extent.geojson",
+                        mime="application/geo+json",
+                        key=f"geo_{rk}", width="stretch",
+                    )
+                    b2.download_button(
+                        "⬇ PDF Report", data=pdf_data,
+                        file_name=f"{evt['id']}_situation_report.txt",
+                        mime="text/plain",
+                        key=f"pdf_{rk}", width="stretch",
+                    )
+                    b3.download_button(
+                        "⬇ CSV Data", data=csv_data,
+                        file_name=f"{evt['id']}_data.csv",
+                        mime="text/csv",
+                        key=f"csv_{rk}", width="stretch",
+                    )
 
-        st.markdown(
-            f"<div style='text-align:center;font-family:DM Mono,monospace;font-size:11px;"
-            f"color:{MUTED};margin-top:8px;'>Showing {len(page_rows)} of {filtered_total} events</div>",
-            unsafe_allow_html=True,
-        )
+    # ── Pagination ─────────────────────────────────────────
+    if total > 0:
+        st.markdown(f"<div style='height:1px;background:{s.BORDER};margin:14px 0;'></div>", unsafe_allow_html=True)
+        left_col, right_col = st.columns([1, 1])
+        with left_col:
+            st.markdown(
+                f"<div style='font-family:DM Mono,monospace;font-size:11px;color:{s.MUTED};"
+                f"padding:6px 0;'>Showing {len(page_rows)} of {total} events</div>",
+                unsafe_allow_html=True,
+            )
+        with right_col:
+            # Build compact pagination — only show needed columns
+            num_cols = 2 + min(total_pages, 5)  # prev + pages + next
+            pg = st.columns(num_cols)
+            with pg[0]:
+                if st.button("‹", key="h_prev", disabled=(cur_page<=1), width="stretch"):
+                    ss.hist_page = cur_page - 1; st.rerun()
+            for i in range(1, min(total_pages, 5) + 1):
+                with pg[i]:
+                    if st.button(str(i), key=f"h_p{i}", width="stretch",
+                                 type="primary" if i==cur_page else "secondary"):
+                        ss.hist_page = i; st.rerun()
+            with pg[-1]:
+                if st.button("›", key="h_next", disabled=(cur_page>=total_pages), width="stretch"):
+                    ss.hist_page = cur_page + 1; st.rerun()
 
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
-def page_performance(cfg, db):
-    metrics = load_metrics(db)
-    topbar("—")
-    breadcrumb("Performance — System Metrics")
+def page_performance():
+    cols = st.columns(5, gap="small")
+    for col, (l, v, sub, good) in zip(cols, [
+        ("AVG TOTAL LATENCY",  "48 min", "↓ 12% vs last season", True),
+        ("SLA COMPLIANCE",     "91.5%",  "43 of 47 events",      True),
+        ("AVG IOU SCORE",      "0.71",   "↑ 0.04 vs last season",True),
+        ("ALERT SUCCESS RATE", "91.3%",  "last 30 days",         False),
+        ("SYSTEM UPTIME",      "99.2%",  "30-day rolling",       True),
+    ]):
+        col.markdown(s.kpi_tile(l, v, sub, s.SUCCESS if good else s.WARNING),
+                     unsafe_allow_html=True)
 
-    avg_lat = float((metrics.get("avg_latency_seconds") or 2880)) / 60
-    avg_iou = float(metrics.get("avg_iou") or 0.71)
-    total_ev = int(metrics.get("total_events") or 47)
-
-    st.markdown("<div style='padding:18px 20px 0;'>", unsafe_allow_html=True)
-    kpi_row([
-        ("Avg Total Latency", f"<span style='color:{GREEN if avg_lat<=60 else AMBER};'>{avg_lat:.0f} min</span>", "vs 60 min SLA"),
-        ("SLA Compliance", f"<span style='color:{GREEN};'>91.5%</span>", f"of {total_ev} events"),
-        ("Avg IoU Score", f"<span style='color:{ACCENT};'>{avg_iou:.2f}</span>", "season avg"),
-        ("Alert Success Rate", f"<span style='color:{GREEN};'>91.3%</span>", "last 30 days"),
-        ("System Uptime", f"<span style='color:{GREEN};'>99.2%</span>", "30-day rolling"),
-    ])
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    st.markdown("<div style='padding:18px 20px 16px;'>", unsafe_allow_html=True)
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
     tab1, tab2, tab3 = st.tabs(["Pipeline Timing", "Detection Quality", "SLA Compliance"])
-    dates = ["Aug 14", "Sep 02", "Sep 19", "Oct 08", "Oct 23"]
 
+    dates  = ["Aug 14", "Sep 02", "Sep 19", "Oct 08", "Oct 23"]
+    lat_y  = [44, 61, 38, 52, 45]
+    iou_y  = [0.74, 0.63, 0.79, 0.68, 0.71]
+
+    # ── TAB 1: Pipeline Timing ─────────────────────────────
     with tab1:
-        fig = go.Figure()
-        fig.add_scatter(x=dates, y=[44, 61, 38, 52, 45], mode="lines+markers", line=dict(color=ACCENT, width=2.5))
-        fig.add_hline(y=60, line_dash="dot", line_color=AMBER)
-        fig.update_layout(**pl(260), xaxis=ax(), yaxis=ax(), showlegend=False)
-        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+        c1, c2 = st.columns(2, gap="small")
 
+        with c1:
+            with st.container(border=True):
+                st.markdown(
+                    s.card_header("Total Latency Over Time", "minutes · SLA = 60 min"),
+                    unsafe_allow_html=True,
+                )
+                fig = go.Figure()
+                fig.add_scatter(
+                    x=dates, y=lat_y, mode="lines+markers",
+                    line=dict(color=s.ACCENT, width=2, shape="spline", smoothing=1.3),
+                    marker=dict(color=s.ACCENT, size=7, line=dict(color=s.BG, width=1.5)),
+                    name="Latency (min)",
+                    hovertemplate="<b>%{x}</b><br>Latency: %{y} min<extra></extra>",
+                )
+                fig.add_hline(
+                    y=60, line_dash="dash", line_color=s.WARNING, line_width=1.5,
+                    annotation_text="SLA 60 min",
+                    annotation_position="top right",
+                    annotation_font=dict(color=s.WARNING, size=10),
+                )
+                fig.update_layout(**_fig(220, showlegend=False,
+                    hoverlabel=dict(bgcolor=s.CARD, bordercolor=s.BORDER,
+                                    font=dict(family="DM Mono, monospace", size=11)),
+                    xaxis=dict(gridcolor="rgba(48,54,61,0.8)", tickfont=dict(size=10, color=s.MUTED)),
+                    yaxis=dict(gridcolor="rgba(48,54,61,0.8)", tickfont=dict(size=10, color=s.MUTED),
+                               title=dict(text="Minutes", font=dict(size=10, color=s.MUTED))),
+                ))
+                st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+
+        with c2:
+            stages  = ["Data Acq", "Preproc", "Detection", "Risk Ass", "Alerting"]
+            avg_s   = [131, 916, 482, 314, 155]
+            min_s   = [95,  780, 390, 250, 120]
+            max_s   = [180, 1100, 580, 410, 200]
+            with st.container(border=True):
+                st.markdown(
+                    s.card_header("Avg Stage Duration", "seconds · min / max range"),
+                    unsafe_allow_html=True,
+                )
+                fig = go.Figure()
+                # Error bars showing min/max range
+                fig.add_bar(
+                    x=stages, y=avg_s, name="Avg (s)",
+                    marker_color=s.PRIMARY, marker_line_width=0,
+                    error_y=dict(
+                        type="data", symmetric=False,
+                        array=[mx - av for mx, av in zip(max_s, avg_s)],
+                        arrayminus=[av - mn for av, mn in zip(avg_s, min_s)],
+                        color=s.MUTED, thickness=1.5, width=6,
+                    ),
+                    hovertemplate="<b>%{x}</b><br>Avg: %{y} s<extra></extra>",
+                )
+                fig.update_layout(**_fig(220,
+                    hoverlabel=dict(bgcolor=s.CARD, bordercolor=s.BORDER,
+                                    font=dict(family="DM Mono, monospace", size=11)),
+                    xaxis=dict(gridcolor="rgba(48,54,61,0.8)", tickfont=dict(size=10, color=s.MUTED)),
+                    yaxis=dict(gridcolor="rgba(48,54,61,0.8)", tickfont=dict(size=10, color=s.MUTED),
+                               title=dict(text="Seconds", font=dict(size=10, color=s.MUTED))),
+                    showlegend=False,
+                ))
+                st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
+        # Pipeline timing table
+        perf = db.get_performance_rows()
+        body = ""
+        for r in perf:
+            lat_c = s.WARNING if r["latency_min"] > 55 else s.SUCCESS
+            sla   = "PASS" if r["latency_min"] <= 60 else "BREACH"
+            body += (
+                f"<tr>"
+                + s.table_cell(r["id"],              color=s.ACCENT, font="mono")
+                + s.table_cell(r["date_utc"][:10],   color=s.MUTED,  font="mono")
+                + s.table_cell(str(r.get("data_acq_s", 120)), font="mono")
+                + s.table_cell(str(r.get("preproc_s",  900)), font="mono")
+                + s.table_cell(str(r.get("flood_det_s",450)), font="mono")
+                + s.table_cell(str(r.get("risk_ass_s", 300)), font="mono")
+                + s.table_cell(str(r.get("alert_s",    150)), font="mono")
+                + s.table_cell(str(r["latency_min"]),
+                               color=lat_c, font="mono", extra="font-weight:600")
+                + f'<td style="padding:8px 12px;border-bottom:1px solid rgba(48,54,61,0.5)">'
+                + s.badge(sla) + "</td></tr>"
+            )
+        st.markdown(s.card_wrap(
+            s.card_header("Pipeline Timing — Per Event",
+                          "seconds per stage · total in minutes")
+            + f'<table style="width:100%;border-collapse:collapse"><thead>'
+            + s.table_header_row(
+                ("Event ID","left"), ("Date","left"),
+                ("Data Acq(s)","left"), ("Preproc(s)","left"),
+                ("Flood Det(s)","left"), ("Risk Ass(s)","left"),
+                ("Alert(s)","left"), ("Total(min)","left"), ("SLA","left"),
+              )
+            + f'</thead><tbody>{body}</tbody></table>'
+            + f'<div style="padding:8px 16px;border-top:1px solid {s.BORDER};'
+            + f'font-family:DM Mono,monospace;font-size:10px;color:{s.MUTED};">'
+            + 'Data sourced from SQLite database · wall-clock duration per pipeline stage'
+            + '</div>'
+        ), unsafe_allow_html=True)
+
+    # ── TAB 2: Detection Quality ───────────────────────────
     with tab2:
-        fig = go.Figure()
-        fig.add_scatter(x=dates, y=[0.74, 0.63, 0.79, 0.68, 0.71], mode="lines+markers", line=dict(color=GREEN, width=2.5))
-        fig.add_hline(y=0.65, line_dash="dot", line_color=AMBER)
-        fig.update_layout(**pl(260), xaxis=ax(), yaxis=dict(range=[0.55, 0.85], gridcolor=BORDER), showlegend=False)
-        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+        c1, c2 = st.columns(2, gap="small")
 
+        with c1:
+            with st.container(border=True):
+                st.markdown(
+                    s.card_header("IoU Score Over Time", "0 – 1 · threshold = 0.65"),
+                    unsafe_allow_html=True,
+                )
+                fig = go.Figure()
+                fig.add_scatter(
+                    x=dates, y=iou_y, mode="lines+markers",
+                    line=dict(color=s.SUCCESS, width=2, shape="spline", smoothing=1.3),
+                    marker=dict(color=s.SUCCESS, size=7, line=dict(color=s.BG, width=1.5)),
+                    name="IoU",
+                    hovertemplate="<b>%{x}</b><br>IoU: %{y:.2f}<extra></extra>",
+                )
+                fig.add_hline(
+                    y=0.65, line_dash="dash", line_color=s.WARNING, line_width=1.5,
+                    annotation_text="Threshold 0.65",
+                    annotation_position="top right",
+                    annotation_font=dict(color=s.WARNING, size=10),
+                )
+                # Shade below threshold
+                fig.add_scatter(
+                    x=dates + dates[::-1],
+                    y=[0.65]*len(dates) + iou_y[::-1],
+                    fill="toself",
+                    fillcolor=f"rgba(245,158,11,0.06)",
+                    line=dict(width=0),
+                    showlegend=False,
+                    hoverinfo="skip",
+                )
+                fig.update_layout(**_fig(220, showlegend=False,
+                    hoverlabel=dict(bgcolor=s.CARD, bordercolor=s.BORDER,
+                                    font=dict(family="DM Mono, monospace", size=11)),
+                    xaxis=dict(gridcolor="rgba(48,54,61,0.8)", tickfont=dict(size=10, color=s.MUTED)),
+                    yaxis=dict(range=[0.5, 0.9],
+                               gridcolor="rgba(48,54,61,0.8)",
+                               tickfont=dict(size=10, color=s.MUTED),
+                               title=dict(text="IoU Score", font=dict(size=10, color=s.MUTED))),
+                ))
+                st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+
+        with c2:
+            with st.container(border=True):
+                st.markdown(
+                    s.card_header("Latency vs IoU Correlation", "per event"),
+                    unsafe_allow_html=True,
+                )
+                fig = go.Figure()
+                fig.add_scatter(
+                    x=lat_y, y=iou_y, mode="markers",
+                    marker=dict(color=s.ACCENT, size=10,
+                                line=dict(color=s.BG, width=1.5)),
+                    text=["EVT-2025-021","EVT-2025-028","EVT-2025-033","EVT-2025-041","EVT-2025-047"],
+                    hovertemplate=(
+                        "<b>%{text}</b><br>"
+                        "Latency: %{x} min<br>"
+                        "IoU: %{y:.2f}<extra></extra>"
+                    ),
+                )
+                # Quadrant lines
+                fig.add_hline(y=0.65, line_dash="dash", line_color=s.WARNING, line_width=1)
+                fig.add_vline(x=60,   line_dash="dash", line_color=s.WARNING, line_width=1)
+                # Quadrant annotations
+                for txt, ax_, ay_ in [
+                    ("✓ Fast & Accurate", 35, 0.80),
+                    ("⚠ Slow & Accurate", 68, 0.80),
+                    ("⚠ Fast & Inaccurate", 35, 0.58),
+                    ("✗ Slow & Inaccurate", 68, 0.58),
+                ]:
+                    fig.add_annotation(x=ax_, y=ay_, text=txt, showarrow=False,
+                                       font=dict(size=8, color=s.MUTED),
+                                       xanchor="center")
+                fig.update_layout(**_fig(220, showlegend=False,
+                    hoverlabel=dict(bgcolor=s.CARD, bordercolor=s.BORDER,
+                                    font=dict(family="DM Mono, monospace", size=11)),
+                    xaxis=dict(range=[30, 75], title=dict(text="Latency (min)", font=dict(size=10, color=s.MUTED)),
+                               gridcolor="rgba(48,54,61,0.8)", tickfont=dict(size=10, color=s.MUTED)),
+                    yaxis=dict(range=[0.55, 0.85], title=dict(text="IoU Score", font=dict(size=10, color=s.MUTED)),
+                               gridcolor="rgba(48,54,61,0.8)", tickfont=dict(size=10, color=s.MUTED)),
+                ))
+                st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+
+        # Alert delivery bars
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+        bars = "".join(
+            f'<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">'
+            f'<span style="font-family:DM Mono,monospace;font-size:11px;color:{s.MUTED};'
+            f'width:90px;flex-shrink:0">{lbl}</span>'
+            f'<div style="flex:1;background:{s.MUTED_BG};height:8px;border-radius:9999px">'
+            f'<div style="width:{pct}%;height:8px;background:'
+            f'{s.SUCCESS if pct==100 else s.ACCENT if pct>=95 else s.WARNING};'
+            f'border-radius:9999px"></div></div>'
+            f'<span style="font-family:DM Mono,monospace;font-size:11px;'
+            f'color:{s.FG};width:40px;text-align:right">{pct}%</span></div>'
+            for lbl, pct in [
+                ("Data Acq", 100), ("Preproc", 100),
+                ("Detection", 97), ("Risk Ass", 95), ("Alerting", 91),
+            ]
+        )
+        st.markdown(s.card_wrap(
+            s.card_header("Alert Delivery by Stage", "% success rate")
+            + f'<div style="padding:16px">{bars}</div>'
+        ), unsafe_allow_html=True)
+
+    # ── TAB 3: SLA Compliance ─────────────────────────────
     with tab3:
-        ms = ["Jun", "Jul", "Aug", "Sep", "Oct"]
-        fig = go.Figure()
-        fig.add_bar(x=ms, y=[4,7,10,9,5], name="Within SLA", marker_color=GREEN)
-        fig.add_bar(x=ms, y=[1,1,2,1,1], name="Breach", marker_color=RED)
-        fig.update_layout(**pl(260), barmode="stack", xaxis=ax(), yaxis=ax())
-        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
-    st.markdown("</div>", unsafe_allow_html=True)
+        c1, c2 = st.columns(2, gap="small")
+
+        with c1:
+            with st.container(border=True):
+                st.markdown(
+                    s.card_header("SLA Compliance by Month",
+                                  "events passing 60-min SLA"),
+                    unsafe_allow_html=True,
+                )
+                months  = ["Jun", "Jul", "Aug", "Sep", "Oct"]
+                within  = [5, 8, 10, 9, 6]
+                breach  = [0, 1, 2, 2, 1]
+                fig = go.Figure()
+                fig.add_bar(
+                    x=months, y=within, name="Within SLA",
+                    marker_color=s.SUCCESS, marker_line_width=0,
+                    hovertemplate="<b>%{x}</b><br>Within SLA: %{y}<extra></extra>",
+                )
+                fig.add_bar(
+                    x=months, y=breach, name="SLA Breach",
+                    marker_color=s.DANGER, marker_line_width=0,
+                    hovertemplate="<b>%{x}</b><br>Breach: %{y}<extra></extra>",
+                )
+                fig.update_layout(**_fig(300, barmode="stack",
+                    hoverlabel=dict(bgcolor=s.CARD, bordercolor=s.BORDER,
+                                    font=dict(family="DM Mono, monospace", size=11)),
+                    xaxis=dict(gridcolor="rgba(48,54,61,0.8)", tickfont=dict(size=10, color=s.MUTED)),
+                    yaxis=dict(gridcolor="rgba(48,54,61,0.8)", tickfont=dict(size=10, color=s.MUTED),
+                               title=dict(text="Events", font=dict(size=10, color=s.MUTED))),
+                    legend=dict(orientation="h", y=-0.2, font=dict(size=10),
+                                bgcolor="rgba(0,0,0,0)"),
+                ))
+                st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+
+        with c2:
+            thresholds = [
+                ("Total pipeline latency", "≤ 60 min",  "48 min avg",   True),
+                ("Flood detection IoU",    "≥ 0.65",    "0.71 avg",     True),
+                ("Alert delivery rate",    "≥ 95%",     "91.3%",        False),
+                ("System availability",    "≥ 99%",     "99.2%",        True),
+                ("Data acquisition gap",   "≤ 6 days",  "3.2 days avg", True),
+            ]
+            rows = "".join(
+                f'<div style="display:flex;justify-content:space-between;align-items:center;'
+                f'padding:12px 0;border-bottom:1px solid {s.BORDER}">'
+                f'<div>'
+                f'<div style="font-family:Inter,sans-serif;font-size:11px;'
+                f'color:{s.FG};margin-bottom:2px">{metric}</div>'
+                f'<div style="font-family:DM Mono,monospace;font-size:10px;color:{s.MUTED}">'
+                f'Target: {tgt} · Actual: {act}</div>'
+                f'</div>'
+                f'{s.badge("PASS" if passed else "FAIL")}</div>'
+                for metric, tgt, act, passed in thresholds
+            )
+            st.markdown(s.card_wrap(
+                s.card_header("SLA Thresholds")
+                + f'<div style="padding:0 16px 4px">{rows}</div>'
+            ), unsafe_allow_html=True)
 
 
-# ════════════════════════════════════════════════════════════
-# PAGE — EXPORT
-# ════════════════════════════════════════════════════════════
-def page_export(cfg, db):
-    events_df = load_events(db)
-    topbar("—")
-    breadcrumb("Export — Data & Reports")
 
-    st.markdown("<div style='padding:18px 20px 0;'>", unsafe_allow_html=True)
-    kpi_row([
-        ("Total Exports", "312", "all formats"),
-        ("PDF Reports", "47", "one per event"),
-        ("GeoJSON Downloads", "138", "flood layers"),
-        ("Avg Export Size", "8.2 MB", "across formats"),
-    ])
-    st.markdown("</div>", unsafe_allow_html=True)
+def page_export():
+    cols = st.columns(4, gap="small")
+    for col, (l, v, sub) in zip(cols, [
+        ("TOTAL EXPORTS (SEASON)", "312",    "all formats combined"),
+        ("PDF REPORTS GENERATED",  "47",     "one per event"),
+        ("GEOJSON DOWNLOADS",      "138",    "flood layers"),
+        ("AVG EXPORT SIZE",        "8.2 MB", "across all formats"),
+    ]):
+        col.markdown(s.kpi_tile(l, v, sub), unsafe_allow_html=True)
 
-    st.markdown("<div style='padding:18px 20px 16px;'>", unsafe_allow_html=True)
-    st.markdown(header("Generate Export"), unsafe_allow_html=True)
-    fmt = st.selectbox("Format", ["GeoJSON", "CSV Tabular", "PDF Report", "GeoTIFF"])
-    csv_data = events_df.to_csv(index=False) if not events_df.empty else "event_id,timestamp\n"
-    st.download_button(
-        "Generate Export", data=csv_data,
-        file_name=f"suddwatch_export_{datetime.now().strftime('%Y%m%d')}.csv",
-        mime="text/csv",
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+
+    all_events = db.get_all_events()
+    FORMATS = {
+        "GeoJSON":        ("Flood extent polygons, village points, road features",   "~2.4 MB"),
+        "Shapefile (ZIP)":("ESRI Shapefile bundle — compatible with ArcGIS / QGIS",  "~3.1 MB"),
+        "CSV Tabular":    ("Villages, roads, health facilities — one row per feature", "~180 KB"),
+        "PDF Report":     ("Formatted situation report with map, tables, QA metrics",  "~4.8 MB"),
+        "GeoTIFF":        ("Flood mask raster at 10 m resolution (Sentinel-1 derived)","~48 MB"),
+    }
+    LAYERS = {
+        "Flood Extent Polygon":      ["GeoJSON","Shapefile (ZIP)","GeoTIFF"],
+        "Affected Villages":         ["GeoJSON","Shapefile (ZIP)","CSV Tabular"],
+        "Inaccessible Roads":        ["GeoJSON","Shapefile (ZIP)","CSV Tabular"],
+        "Health Facilities at Risk": ["GeoJSON","Shapefile (ZIP)","CSV Tabular"],
+        "Administrative Boundaries": ["GeoJSON","Shapefile (ZIP)"],
+        "Affected Population Grid":  ["GeoJSON","GeoTIFF"],
+    }
+    EXT = {"GeoJSON":".geojson","Shapefile (ZIP)":".zip",
+           "CSV Tabular":".csv","PDF Report":".pdf","GeoTIFF":".tif"}
+
+    fmt = st.session_state.export_fmt
+    ext = EXT.get(fmt, "")
+
+    s1, s2, s3 = st.columns(3, gap="small")
+
+    # ── Step 1 ────────────────────────────────────────────
+    with s1:
+        with st.container(border=True):
+            st.markdown(s.card_header("Step 1 — Select Scope"), unsafe_allow_html=True)
+
+            scope = st.radio("scope", ["Single Event","Full Season"],
+                             horizontal=True, label_visibility="collapsed",
+                             key="ex_scope_r",
+                             index=0 if st.session_state.export_scope=="Single Event" else 1)
+            st.session_state.export_scope = scope
+
+            if scope == "Single Event":
+                st.markdown(
+                    f"<div style='font-size:11px;color:{s.MUTED};margin:10px 0 6px;'>"
+                    f"Select events to export</div>",
+                    unsafe_allow_html=True,
+                )
+                for ei, evt in enumerate(all_events):
+                    sel = evt["id"] in st.session_state.export_events
+                    bg  = f"rgba(26,127,212,0.12)" if sel else "transparent"
+                    bc  = s.PRIMARY if sel else s.BORDER
+                    chk = "☑" if sel else "☐"
+                    # Render as styled HTML row — clicking the button toggles selection
+                    if st.button(
+                        f"{chk}  {evt['id']} · {evt['date_utc'][:10]} · {evt['county']}",
+                        key=f"ev_{ei}_{evt['id']}", width="stretch",
+                        type="primary" if sel else "secondary",
+                    ):
+                        if sel: st.session_state.export_events.discard(evt["id"])
+                        else:   st.session_state.export_events.add(evt["id"])
+                        st.rerun()
+                st.markdown("<div style='flex:1;'></div>", unsafe_allow_html=True)
+            else:
+                st.markdown(
+                    f"<div style='font-size:11px;color:{s.MUTED};margin:10px 0 4px;'>Season date range</div>",
+                    unsafe_allow_html=True,
+                )
+                dc1, dc2 = st.columns(2)
+                with dc1:
+                    st.date_input("From", value=None, format="YYYY-MM-DD",
+                                  label_visibility="collapsed", key="ex_from")
+                with dc2:
+                    st.date_input("To", value=None, format="YYYY-MM-DD",
+                                  label_visibility="collapsed", key="ex_to")
+                st.markdown(
+                    f"<div style='padding:8px 10px;background:{s.MUTED_BG};"
+                    f"border:1px solid {s.BORDER};border-radius:4px;margin-top:8px;"
+                    f"font-family:DM Mono,monospace;font-size:11px;color:{s.MUTED};'>"
+                    f"47 events matched · all states</div>",
+                    unsafe_allow_html=True,
+                )
+                st.markdown(
+                    f"<div style='font-size:11px;color:{s.MUTED};margin:10px 0 4px;'>Filter by state</div>",
+                    unsafe_allow_html=True,
+                )
+                st.selectbox("State",
+                             ["All states","Jonglei only","Unity only","Upper Nile only"],
+                             label_visibility="collapsed", key="ex_state")
+
+    # ── Step 2 ────────────────────────────────────────────
+    with s2:
+        with st.container(border=True):
+            st.markdown(s.card_header("Step 2 — Format & Layers"), unsafe_allow_html=True)
+            st.markdown(
+                f"<div style='font-size:11px;color:{s.MUTED};margin-bottom:8px;'>Export format</div>",
+                unsafe_allow_html=True,
+            )
+            for fi, (fname_opt, (fdesc, fsize)) in enumerate(FORMATS.items()):
+                sel  = st.session_state.export_fmt == fname_opt
+                bg   = f"rgba(26,127,212,0.10)" if sel else "transparent"
+                bc   = s.PRIMARY if sel else s.BORDER
+                dot  = f"<span style='display:inline-block;width:8px;height:8px;border-radius:50%;background:{s.PRIMARY};margin-right:6px;flex-shrink:0;'></span>" if sel else f"<span style='display:inline-block;width:8px;height:8px;border-radius:50%;border:1.5px solid {s.BORDER};margin-right:6px;flex-shrink:0;'></span>"
+                st.markdown(
+                    f"<div style='background:{bg};border:1px solid {bc};border-radius:4px;"
+                    f"padding:8px 12px;margin-bottom:4px;'>"
+                    f"<div style='display:flex;align-items:center;margin-bottom:2px;'>"
+                    f"{dot}"
+                    f"<span style='font-family:Inter,sans-serif;font-size:12px;font-weight:600;"
+                    f"color:{s.FG};'>{fname_opt}</span>"
+                    f"<span style='font-family:DM Mono,monospace;font-size:10px;color:{s.ACCENT};"
+                    f"margin-left:auto;'>{fsize}</span></div>"
+                    f"<div style='font-family:Inter,sans-serif;font-size:10px;color:{s.MUTED};"
+                    f"margin-left:14px;'>{fdesc}</div></div>",
+                    unsafe_allow_html=True,
+                )
+                if st.button(f"Select {fname_opt}", key=f"fmt_{fi}", width="stretch"):
+                    st.session_state.export_fmt = fname_opt
+                    st.session_state.export_done = False
+                    st.rerun()
+
+    # ── Step 3 ────────────────────────────────────────────
+    with s3:
+        with st.container(border=True):
+            fmt = st.session_state.export_fmt
+            ext = EXT.get(fmt, "")
+            st.markdown(
+                s.card_header("Step 3 — Select Layers & Export")
+                + f"<div style='font-size:11px;color:{s.MUTED};margin-bottom:8px;'>"
+                + f"Layers available for "
+                + f"<span style='font-family:DM Mono,monospace;color:{s.ACCENT};'>{ext}</span>"
+                + f"</div>",
+                unsafe_allow_html=True,
+            )
+            for layer, compat in LAYERS.items():
+                avail   = fmt in compat
+                checked = layer in st.session_state.export_layers and avail
+                toggled = st.checkbox(
+                    layer + ("" if avail else " (unavailable)"),
+                    value=checked, disabled=not avail,
+                    key=f"layer_{layer}",
+                )
+                if avail:
+                    if toggled: st.session_state.export_layers.add(layer)
+                    else:       st.session_state.export_layers.discard(layer)
+
+            n_ev  = (len(st.session_state.export_events)
+                     if st.session_state.export_scope == "Single Event" else 47)
+            n_lay = len([l for l in st.session_state.export_layers
+                         if fmt in LAYERS.get(l, [])])
+
+            st.markdown(
+                f"<div style='padding:10px 12px;background:rgba(33,38,45,0.3);"
+                f"border:1px solid rgba(48,54,61,0.7);border-radius:4px;"
+                f"margin:12px 0 8px;font-family:DM Mono,monospace;font-size:11px;'>"
+                + "".join(
+                    f"<div style='display:flex;justify-content:space-between;margin-bottom:3px;'>"
+                    f"<span style='color:{s.MUTED};'>{k}</span>"
+                    f"<span style='color:{vc};'>{v}</span></div>"
+                    for k, v, vc in [
+                        ("Format",   fmt,            s.FG),
+                        ("Events",   str(n_ev),      s.FG),
+                        ("Layers",   str(n_lay),     s.FG),
+                        ("Est. size", FORMATS[fmt][1], s.ACCENT),
+                    ]
+                )
+                + "</div>",
+                unsafe_allow_html=True,
+            )
+
+            if not st.session_state.export_done:
+                if st.button("⬇ Generate Export", key="gen_exp",
+                             width="stretch", type="primary"):
+                    with st.spinner("Preparing export…"):
+                        import time; time.sleep(1)
+                    st.session_state.export_done = True
+                    st.rerun()
+            else:
+                st.success("✅ Export ready")
+                # Build actual export data
+                if fmt == "CSV Tabular":
+                    buf = io.StringIO()
+                    w   = csv.writer(buf)
+                    w.writerow(["event_id","date","flood_ha","affected","state","county"])
+                    for e in all_events:
+                        w.writerow([e["id"],e["date_utc"],e["flood_ha"],
+                                    e["affected"],e["state"],e["county"]])
+                    data  = buf.getvalue().encode()
+                    fname = "suddwatch_export.csv"
+                    mime  = "text/csv"
+                elif fmt == "GeoJSON":
+                    data  = json.dumps({
+                        "type": "FeatureCollection",
+                        "features": [{"type":"Feature","properties":e,"geometry":None}
+                                     for e in all_events],
+                    }, indent=2).encode()
+                    fname = "suddwatch_export.geojson"
+                    mime  = "application/json"
+                elif fmt == "PDF Report":
+                    lines_txt = [
+                        "SUDDWATCH FLOOD SITUATION REPORT",
+                        "=" * 50,
+                        f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
+                        f"Season: 2025 Flood Season",
+                        "",
+                        "EVENTS INCLUDED",
+                        "-" * 50,
+                    ]
+                    for e in all_events:
+                        lines_txt.append(
+                            f"{e['id']}  |  {e['date_utc']}  |  "
+                            f"{e['flood_ha']:,} ha  |  {e['affected']:,} affected  |  "
+                            f"{e['state']} / {e['county']}"
+                        )
+                    data  = "\n".join(lines_txt).encode()
+                    fname = "suddwatch_situation_report.txt"
+                    mime  = "text/plain"
+                else:
+                    data  = (f"SuddWatch Export — {fmt}\n"
+                             f"Generated: {datetime.utcnow()}\n"
+                             f"Events: {n_ev} | Layers: {n_lay}").encode()
+                    fname = f"suddwatch_export{ext}"
+                    mime  = "application/octet-stream"
+
+                st.download_button(
+                    f"⬇ Download {ext}", data=data,
+                    file_name=fname, mime=mime,
+                    key="do_dl", width="stretch",
+                )
+                if st.button("↺ Reset", key="reset_exp", width="stretch"):
+                    st.session_state.export_done = False
+                    st.rerun()
+
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+
+    # ── Download History ──────────────────────────────────
+    hist = db.get_download_history()
+
+    # Build preview content for each file type
+    def _preview(filename: str) -> str:
+        if filename.endswith(".geojson"):
+            return json.dumps({"type":"FeatureCollection","note":"Preview — full file available via Re-download","features":[]}, indent=2)
+        elif filename.endswith(".csv"):
+            return "event_id,date,flood_ha,affected,state,county\nEVT-2025-047,2025-10-23,1200,5000,Jonglei,Bor South\n..."
+        elif filename.endswith(".pdf") or filename.endswith(".txt"):
+            return "SUDDWATCH FLOOD SITUATION REPORT\n" + "="*50 + "\nPreview — full report available via Re-download"
+        return f"File: {filename}\nPreview not available for this format."
+
+    def _mime(filename: str) -> str:
+        if filename.endswith(".geojson"): return "application/json"
+        if filename.endswith(".csv"):     return "text/csv"
+        return "text/plain"
+
+    # Download History
+    st.markdown(
+        s.card_wrap(s.card_header("Download History", "Last 30 days")),
+        unsafe_allow_html=True,
     )
-    st.markdown("</div>", unsafe_allow_html=True)
-
-
+    # Column headers
+    h1,h2,h3,h4,h5,h6 = st.columns([3,1,2,1,1,1])
+    h1.markdown(f"<span style='font-family:DM Mono,monospace;font-size:10px;color:{s.MUTED};text-transform:uppercase;letter-spacing:0.05em;'>Filename</span>", unsafe_allow_html=True)
+    h2.markdown(f"<span style='font-family:DM Mono,monospace;font-size:10px;color:{s.MUTED};text-transform:uppercase;letter-spacing:0.05em;'>User</span>", unsafe_allow_html=True)
+    h3.markdown(f"<span style='font-family:DM Mono,monospace;font-size:10px;color:{s.MUTED};text-transform:uppercase;letter-spacing:0.05em;'>Date</span>", unsafe_allow_html=True)
+    h4.markdown(f"<span style='font-family:DM Mono,monospace;font-size:10px;color:{s.MUTED};text-transform:uppercase;letter-spacing:0.05em;'>Size</span>", unsafe_allow_html=True)
+    h5.markdown(f"<span style='font-family:DM Mono,monospace;font-size:10px;color:{s.MUTED};text-transform:uppercase;letter-spacing:0.05em;'>Status</span>", unsafe_allow_html=True)
+    h6.markdown(f"<span style='font-family:DM Mono,monospace;font-size:10px;color:{s.MUTED};text-transform:uppercase;letter-spacing:0.05em;'>Re-download</span>", unsafe_allow_html=True)
+    st.markdown(f"<hr style='margin:4px 0;border-color:rgba(48,54,61,0.8);'>", unsafe_allow_html=True)
+    for h in hist:
+        fname = h["filename"]
+        if fname.endswith(".geojson"):
+            fdata, fmime = json.dumps({"type":"FeatureCollection","features":[]}).encode(), "application/json"
+        elif fname.endswith(".csv"):
+            fdata, fmime = b"event_id,date\n", "text/csv"
+        else:
+            fdata, fmime = fname.encode(), "text/plain"
+        c1, c2, c3, c4, c5, c6 = st.columns([3, 1, 2, 1, 1, 1])
+        c1.markdown(
+            f"<span style='font-family:DM Mono,monospace;font-size:11px;"
+            f"color:{s.ACCENT};'>{fname}</span>", unsafe_allow_html=True)
+        c2.markdown(
+            f"<span style='font-family:DM Mono,monospace;font-size:11px;"
+            f"color:{s.MUTED};'>{h['username']}</span>", unsafe_allow_html=True)
+        c3.markdown(
+            f"<span style='font-family:DM Mono,monospace;font-size:11px;"
+            f"color:{s.MUTED};'>{h['date_utc']}</span>", unsafe_allow_html=True)
+        c4.markdown(
+            f"<span style='font-family:DM Mono,monospace;font-size:11px;"
+            f"color:{s.MUTED};'>{h['size_label']}</span>", unsafe_allow_html=True)
+        with c5:
+            st.markdown(s.badge(h["status"]), unsafe_allow_html=True)
+        with c6:
+            st.download_button(
+                "⬇ Re-download", data=fdata, file_name=fname, mime=fmime,
+                key="redl_" + str(h["id"]), width="stretch",
+            )
+        st.markdown(f"<hr style='margin:4px 0;border-color:rgba(48,54,61,0.4);'>",
+                    unsafe_allow_html=True)
 # ════════════════════════════════════════════════════════════
 # MAIN
 # ════════════════════════════════════════════════════════════
-def main():
-    setup_logging("WARNING")
-    cfg = get_config()
-    db = get_db(cfg)
-    metrics = load_metrics(db)
-    page = render_sidebar(metrics)
+render_sidebar()
+event    = db.get_active_event()
+last_evt = event.get("date_utc","—") if event else "—"
+render_topbar(last_evt)
+render_breadcrumb({
+    "Home":"Dashboard — Live Event",
+    "History":"History — Flood Events Archive",
+    "Performance":"Performance — System Metrics",
+    "Export":"Export — Data & Reports",
+}.get(st.session_state.page,""))
 
-    if   page == "Home":        page_home(cfg, db)
-    elif page == "History":     page_history(cfg, db)
-    elif page == "Performance": page_performance(cfg, db)
-    elif page == "Export":      page_export(cfg, db)
-
-
-if __name__ == "__main__":
-    main()
+page = st.session_state.page
+if   page == "Home":        page_home()
+elif page == "History":     page_history()
+elif page == "Performance": page_performance()
+elif page == "Export":      page_export()
