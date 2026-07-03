@@ -354,14 +354,14 @@ TOP AFFECTED VILLAGES
             # Log to database
             if db_manager:
                 try:
-                    db_manager.insert_alert(
-                        event_id=event_id,
-                        alert_type="sms",
-                        recipient=recipient,
-                        status=result["status"],
-                        message_sid=result.get("sid"),
-                        error_message=result.get("error"),
-                    )
+                    db_manager.insert_alert(event_id, {
+                        "channel":          "sms",
+                        "recipient":        recipient,
+                        "delivery_status":  result["status"],
+                        "sent_timestamp":   datetime.now().isoformat(),
+                        "error_reason":     result.get("error"),
+                        "message_preview":  message[:100] if len(message) > 100 else message,
+                    })
                 except Exception as e:
                     logger.warning(f"Failed to log SMS alert to DB: {e}")
 
@@ -445,14 +445,14 @@ TOP AFFECTED VILLAGES
             # Log to database
             if db_manager:
                 try:
-                    db_manager.insert_alert(
-                        event_id=event_id,
-                        alert_type="email",
-                        recipient=recipient,
-                        status=result["status"],
-                        message_sid=None,
-                        error_message=result.get("error"),
-                    )
+                    db_manager.insert_alert(event_id, {
+                        "channel":          "email",
+                        "recipient":        recipient,
+                        "delivery_status":  result["status"],
+                        "sent_timestamp":   datetime.now().isoformat(),
+                        "error_reason":     result.get("error"),
+                        "message_preview":  subject[:100],
+                    })
                 except Exception as e:
                     logger.warning(f"Failed to log email alert to DB: {e}")
 
