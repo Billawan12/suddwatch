@@ -202,16 +202,26 @@ def render_sidebar():
     with st.sidebar:
         st.markdown(f"""
         <div style="padding:16px;border-bottom:1px solid {s.BORDER}">
-          <div style="display:flex;align-items:center;gap:8px">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                 stroke="{s.ACCENT}" stroke-width="2" stroke-linecap="round">
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-            </svg>
-            <span style="font-family:'Barlow Condensed',sans-serif;font-size:18px;
-                         font-weight:700;letter-spacing:0.025em;color:{s.FG}">SUDDWATCH</span>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="position:relative;width:36px;height:36px;border-radius:8px;
+                        background:rgba(14,165,233,0.1);border:1px solid rgba(14,165,233,0.25);
+                        display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                   stroke="{s.ACCENT}" stroke-width="2" stroke-linecap="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              </svg>
+              <div style="position:absolute;bottom:-3px;right:-3px;width:8px;height:8px;
+                          border-radius:50%;background:{s.SUCCESS};
+                          border:1.5px solid #0d1117;"></div>
+            </div>
+            <div>
+              <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;
+                          font-weight:700;color:{s.FG};letter-spacing:0.04em;">SUDDWATCH</div>
+              <div style="font-family:'DM Mono',monospace;font-size:9px;
+                          color:{s.MUTED};margin-top:2px;line-height:1.4;">
+                Smart technology,<br>safeguarding communities.</div>
+            </div>
           </div>
-          <div style="font-family:'DM Mono',monospace;font-size:10px;
-                      color:{s.MUTED};margin-top:4px">Flood Detection &amp; Alert System</div>
         </div>
         <div style="padding:16px 12px 4px;font-family:'DM Mono',monospace;font-size:10px;
                     text-transform:uppercase;letter-spacing:0.1em;color:{s.MUTED}">
