@@ -485,6 +485,12 @@ def page_home():
 
 # ════════════════════════════════════════════════════════════
 # PAGE — HISTORY
+
+    # ── Intelligence Feed (ReliefWeb) ─────────────────────────
+    st.markdown("<div style='padding:0 20px 20px;'>", unsafe_allow_html=True)
+    render_intelligence_feed()
+    st.markdown("</div>", unsafe_allow_html=True)
+
 # ════════════════════════════════════════════════════════════
 def page_history():
     # ── Session state ──────────────────────────────────────
@@ -1405,6 +1411,186 @@ def page_export():
             )
         st.markdown(f"<hr style='margin:4px 0;border-color:rgba(48,54,61,0.4);'>",
                     unsafe_allow_html=True)
+# ════════════════════════════════════════════════════════════
+# INTELLIGENCE FEED — ReliefWeb API
+# ════════════════════════════════════════════════════════════
+@st.cache_data(ttl=1800)
+def _fetch_reliefweb() -> list:
+    """
+    Fetch latest South Sudan flood reports from ReliefWeb API.
+    Cached for 30 minutes. Silent fallback on failure.
+    No API key required — ReliefWeb is a free public API by OCHA.
+    """
+    import json, urllib.request
+    url = "https://api.reliefweb.int/v1/reports?appname=suddwatch"
+    payload = {
+        "filter": {
+            "operator": "AND",
+            "conditions": [
+                {"field": "country.name", "value": "South Sudan"},
+                {"field": "theme.name",   "value": "Floods"},
+            ]
+        },
+        "fields": {"include": ["title","date.created","source.name","url"]},
+        "sort":   ["date.created:desc"],
+        "limit":  6,
+    }
+    try:
+        req = urllib.request.Request(
+            url, data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"}, method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=8) as r:
+            resp = json.loads(r.read())
+        articles = []
+        for item in resp.get("data", []):
+            f = item.get("fields", {})
+            src = f.get("source", [{}])
+            articles.append({
+                "title":  f.get("title", "—"),
+                "date":   f.get("date", {}).get("created", "")[:10],
+                "source": src[0].get("name", "ReliefWeb") if src else "ReliefWeb",
+                "url":    f.get("url", "https://reliefweb.int"),
+            })
+        return articles
+    except Exception:
+        return []
+
+
+SOURCE_IMGS = {
+    "OCHA": "data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMTIwIDYwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSIxMjAiIGhlaWdodD0iNjAiIGZpbGw9IiMwNzExMWEiLz48cGF0aCBkPSJNNSA0NSBRMjAgMTUgMzUgMzUgUTUwIDU1IDY1IDI1IFE4MCA1IDk1IDIwIFExMDggMzIgMTE4IDIyIiBmaWxsPSJub25lIiBzdHJva2U9IiMwZWE1ZTkiIHN0cm9rZS13aWR0aD0iMi41IiBvcGFjaXR5PSIwLjkiLz48cGF0aCBkPSJNNSA1MCBRMjAgMjAgMzUgNDAgUTUwIDYwIDY1IDMwIFE4MCAxMCA5NSAyNSBRMTA4IDM3IDExOCAyNyIgZmlsbD0iIzBlYTVlOSIgZmlsbC1vcGFjaXR5PSIwLjA4Ii8+PGNpcmNsZSBjeD0iMzUiIGN5PSIzNSIgcj0iNCIgZmlsbD0iI2Y4NTE0OSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxIi8+PGNpcmNsZSBjeD0iNjUiIGN5PSIyNSIgcj0iNCIgZmlsbD0iI2Y1OWUwYiIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxIi8+PGNpcmNsZSBjeD0iOTUiIGN5PSIyMCIgcj0iNCIgZmlsbD0iIzIyYzU1ZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9zdmc+",
+    "UNHCR": "data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMTIwIDYwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSIxMjAiIGhlaWdodD0iNjAiIGZpbGw9IiMwNzExMWEiLz48Y2lyY2xlIGN4PSI2MCIgY3k9IjMwIiByPSIyMiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjYTc4YmZhIiBzdHJva2Utd2lkdGg9IjEiIG9wYWNpdHk9IjAuMyIvPjxjaXJjbGUgY3g9IjYwIiBjeT0iMzAiIHI9IjE0IiBmaWxsPSJub25lIiBzdHJva2U9IiNhNzhiZmEiIHN0cm9rZS13aWR0aD0iMSIgb3BhY2l0eT0iMC41Ii8+PGNpcmNsZSBjeD0iNjAiIGN5PSIzMCIgcj0iNiIgZmlsbD0iI2E3OGJmYSIgb3BhY2l0eT0iMC43Ii8+PGxpbmUgeDE9IjEwIiB5MT0iMzAiIHgyPSIzOCIgeTI9IjMwIiBzdHJva2U9IiNhNzhiZmEiIHN0cm9rZS13aWR0aD0iMSIgb3BhY2l0eT0iMC40IiBzdHJva2UtZGFzaGFycmF5PSIzLDIiLz48bGluZSB4MT0iODIiIHkxPSIzMCIgeDI9IjExMCIgeTI9IjMwIiBzdHJva2U9IiNhNzhiZmEiIHN0cm9rZS13aWR0aD0iMSIgb3BhY2l0eT0iMC40IiBzdHJva2UtZGFzaGFycmF5PSIzLDIiLz48L3N2Zz4=",
+    "WFP": "data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMTIwIDYwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSIxMjAiIGhlaWdodD0iNjAiIGZpbGw9IiMwNzExMWEiLz48cmVjdCB4PSI4IiB5PSIzOCIgd2lkdGg9IjE0IiBoZWlnaHQ9IjE2IiBmaWxsPSIjZjU5ZTBiIiBvcGFjaXR5PSIwLjYiIHJ4PSIxIi8+PHJlY3QgeD0iMjgiIHk9IjI4IiB3aWR0aD0iMTQiIGhlaWdodD0iMjYiIGZpbGw9IiNmNTllMGIiIG9wYWNpdHk9IjAuNyIgcng9IjEiLz48cmVjdCB4PSI0OCIgeT0iMTgiIHdpZHRoPSIxNCIgaGVpZ2h0PSIzNiIgZmlsbD0iI2Y1OWUwYiIgb3BhY2l0eT0iMC44NSIgcng9IjEiLz48cmVjdCB4PSI2OCIgeT0iMjIiIHdpZHRoPSIxNCIgaGVpZ2h0PSIzMiIgZmlsbD0iI2Y1OWUwYiIgb3BhY2l0eT0iMC43NSIgcng9IjEiLz48cmVjdCB4PSI4OCIgeT0iMzIiIHdpZHRoPSIxNCIgaGVpZ2h0PSIyMiIgZmlsbD0iI2Y1OWUwYiIgb3BhY2l0eT0iMC42IiByeD0iMSIvPjwvc3ZnPg==",
+    "default": "data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMTIwIDYwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSIxMjAiIGhlaWdodD0iNjAiIGZpbGw9IiMwNzExMWEiLz48cGF0aCBkPSJNMCA0MiBRMjAgMzAgNDAgMzggUTYwIDQ2IDgwIDI4IFExMDAgMTIgMTIwIDIyIiBmaWxsPSIjMGVhNWU5MmEiIHN0cm9rZT0iIzBlYTVlOSIgc3Ryb2tlLXdpZHRoPSIxLjUiLz48cGF0aCBkPSJNMCA1MCBRMjAgMzggNDAgNDYgUTYwIDU0IDgwIDM2IFExMDAgMjAgMTIwIDMwIiBmaWxsPSIjMGVhNWU5MTUiLz48Y2lyY2xlIGN4PSI0MCIgY3k9IjM4IiByPSI0IiBmaWxsPSIjZjg1MTQ5IiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjEuMiIvPjxjaXJjbGUgY3g9IjgwIiBjeT0iMjgiIHI9IjQiIGZpbGw9IiNmNTllMGIiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMS4yIi8+PC9zdmc+",
+}
+
+def render_intelligence_feed():
+    """
+    Render Intelligence Feed as a card grid — 3 cards per row.
+    Each card shows source badge, title, date, description snippet,
+    and a Read More link. Uses ReliefWeb RSS feed (no API key needed).
+    Falls back to real OCHA articles when offline.
+    """
+    FALLBACK = [
+        {"title": "South Sudan Floods Snapshot — 13 Nov 2025",
+         "date": "2025-11-13", "source": "OCHA",
+         "desc": "960,600 people affected in 26 counties. Jonglei and Unity account for 92% of caseload. 335,000 displaced across 16 counties.",
+         "url": "https://www.unocha.org/publications/report/south-sudan/south-sudan-floods-snapshot-13-november-2025"},
+        {"title": "South Sudan Floods Snapshot — 30 Oct 2025",
+         "date": "2025-10-30", "source": "OCHA",
+         "desc": "Widespread destruction of homes, farmland and critical infrastructure. Schools and health facilities damaged across Jonglei and Unity states.",
+         "url": "https://www.unocha.org/publications/report/south-sudan/south-sudan-floods-snapshot-30-october-2025"},
+        {"title": "South Sudan Floods Snapshot — 10 Oct 2025",
+         "date": "2025-10-10", "source": "OCHA",
+         "desc": "Bentiu IDP camp housing 109,000 displaced people at risk of breach. IOM began urgent dyke repairs. Roads impassable in Unity, Upper Nile and Jonglei.",
+         "url": "https://www.unocha.org/publications/report/south-sudan/south-sudan-floods-snapshot-10-october-2025"},
+        {"title": "South Sudan Floods Snapshot — 2 Oct 2025",
+         "date": "2025-10-02", "source": "OCHA",
+         "desc": "639,225 people affected across 26 counties in six states. Nearly 175,000 displaced, sheltering on higher ground. 19 flood-related deaths reported.",
+         "url": "https://www.unocha.org/publications/report/south-sudan/south-sudan-floods-snapshot-2-october-2025"},
+        {"title": "South Sudan Floods Snapshot — 5 Sep 2025",
+         "date": "2025-09-05", "source": "OCHA",
+         "desc": "Floodwater submerged farmland, homes and humanitarian compounds. Waterborne diseases and snake bites increasing. Overcrowding at relocation sites.",
+         "url": "https://www.unocha.org/publications/report/south-sudan/south-sudan-floods-snapshot-5-september-2025"},
+        {"title": "South Sudan Humanitarian Snapshot — May 2025",
+         "date": "2025-06-19", "source": "OCHA",
+         "desc": "Flood Experts Group issues early warning — elevated risk for H2 2025. Satellite monitoring shows flood extent already exceeds 2024 levels as of late May.",
+         "url": "https://www.unocha.org/publications/report/south-sudan/south-sudan-humanitarian-snapshot-may-2025"},
+    ]
+
+    articles = _fetch_reliefweb()
+    is_live  = len(articles) > 0
+    if not articles:
+        articles = FALLBACK
+
+    # Source colour mapping
+    SOURCE_COLORS = {
+        "OCHA":   ("#0ea5e9", "rgba(14,165,233,0.12)"),
+        "UNHCR":  ("#a78bfa", "rgba(167,139,250,0.12)"),
+        "WFP":    ("#f59e0b", "rgba(245,158,11,0.12)"),
+        "UNICEF": ("#22c55e", "rgba(34,197,94,0.12)"),
+        "IOM":    ("#0ea5e9", "rgba(14,165,233,0.12)"),
+        "WHO":    ("#22c55e", "rgba(34,197,94,0.12)"),
+        "MSF":    ("#f85149", "rgba(248,81,73,0.12)"),
+        "IFRC":   ("#f85149", "rgba(248,81,73,0.12)"),
+    }
+
+    # Status badge
+    if is_live:
+        status = (f"<span style='font-family:DM Mono,monospace;font-size:10px;"
+                  f"color:{s.SUCCESS};padding:2px 8px;background:rgba(34,197,94,0.1);"
+                  f"border:1px solid rgba(34,197,94,0.3);border-radius:4px;'>● live</span>")
+    else:
+        status = (f"<span style='font-family:DM Mono,monospace;font-size:10px;"
+                  f"color:{s.MUTED};padding:2px 8px;background:{s.MUTED_BG};"
+                  f"border:1px solid {s.BORDER};border-radius:4px;'>offline</span>")
+
+    # Build cards — 3 per row using CSS grid
+    cards_html = ""
+    for a in articles:
+        title = a["title"] if len(a["title"]) <= 72 else a["title"][:69] + "..."
+        desc  = a.get("desc", "")
+        if desc and len(desc) > 120:
+            desc = desc[:117] + "..."
+        src_color, src_bg = SOURCE_COLORS.get(a["source"], (s.MUTED, f"{s.MUTED_BG}"))
+        url_   = a["url"]
+        title_ = a["title"] if len(a["title"]) <= 72 else a["title"][:69] + "..."
+        desc_  = a.get("desc", "")
+        if desc_ and len(desc_) > 120:
+            desc_ = desc_[:117] + "..."
+        src_color, src_bg = SOURCE_COLORS.get(a["source"], (s.MUTED, s.MUTED_BG))
+        src_   = a["source"]
+        date_  = a["date"]
+        img_src = SOURCE_IMGS.get(src_, SOURCE_IMGS["default"])
+        cards_html += (
+            f'<a href="{url_}" target="_blank" style="text-decoration:none;display:block;">'
+            f'<div style="background:{s.CARD};border:1px solid {s.BORDER};'
+            f'border-radius:4px;overflow:hidden;height:100%;box-sizing:border-box;">'
+            f'<div style="width:100%;background:#0a1520;border-bottom:1px solid {s.BORDER};'
+            f'display:flex;align-items:center;justify-content:center;padding:4px 0;">'
+            f'<img src="{img_src}" style="width:100%;height:60px;object-fit:cover;display:block;"/>'
+            f'</div>'
+            f'<div style="padding:12px;">'
+            f'<div style="display:flex;justify-content:space-between;'
+            f'align-items:center;margin-bottom:8px;">'
+            f'<span style="font-family:DM Mono,monospace;font-size:10px;font-weight:600;'
+            f'color:{src_color};background:{src_bg};padding:2px 8px;border-radius:4px;">{src_}</span>'
+            f'<span style="font-family:DM Mono,monospace;font-size:10px;color:{s.MUTED};">{date_}</span>'
+            f'</div>'
+            f'<div style="font-family:Inter,sans-serif;font-size:12px;font-weight:600;'
+            f'color:{s.FG};line-height:1.5;margin-bottom:6px;">{title_}</div>'
+            f'<div style="font-family:Inter,sans-serif;font-size:11px;color:{s.MUTED};'
+            f'line-height:1.5;margin-bottom:10px;">{desc_}</div>'
+            f'<div style="font-family:DM Mono,monospace;font-size:10px;color:{s.ACCENT};">'
+            f'Read more ↗</div>'
+            f'</div></div></a>'
+        )
+
+    grid_html = (
+        f"<div style='display:grid;grid-template-columns:repeat(3,1fr);"
+        f"gap:12px;padding:16px;'>"
+        + cards_html +
+        f"</div>"
+    )
+
+    sub_header = (
+        f"<div style='font-family:DM Mono,monospace;font-size:10px;"
+        f"color:{s.MUTED};padding:4px 16px 8px;"
+        f"border-bottom:1px solid {s.BORDER};'>"
+        f"South Sudan · Floods · via ReliefWeb OCHA</div>"
+    )
+
+    st.markdown(
+        s.card_wrap(
+            s.card_header("Intelligence Feed", status)
+            + sub_header
+            + grid_html
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+
 # ════════════════════════════════════════════════════════════
 # MAIN
 # ════════════════════════════════════════════════════════════
