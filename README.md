@@ -50,13 +50,13 @@ Sentinel-1 SAR → Download → Preprocess → Detect Floods → Assess Risk →
 
 ### Key Metrics
 
-| Metric | Target | Achieved |
-|--------|--------|----------|
-| Alert latency | ≤ 60 min | 45–52 min avg |
-| Detection IoU | ≥ 0.65 | 0.71 avg |
-| Alert delivery rate | ≥ 95% | SMS + Email confirmed |
-| System uptime | ≥ 99% | 99.2% |
-| Test coverage | — | 99 tests passing |
+| Metric              | Target    | Achieved              |
+| ------------------- | --------- | --------------------- |
+| Alert latency       | ≤ 60 min | 45–52 min avg        |
+| Detection IoU       | ≥ 0.65   | 0.71 avg              |
+| Alert delivery rate | ≥ 95%    | SMS + Email confirmed |
+| System uptime       | ≥ 99%    | 99.2%                 |
+| Test coverage       | —        | 99 tests passing      |
 
 ---
 
@@ -151,21 +151,21 @@ suddwatch/
 
 ### System Requirements
 
-| Requirement | Version | Notes |
-|-------------|---------|-------|
-| Python | 3.12+ | Tested on 3.12.6 |
-| ESA SNAP | 10.0+ | For SAR preprocessing |
-| macOS / Linux | — | Windows not tested |
-| RAM | ≥ 8 GB | Sentinel-1 scenes are large |
-| Disk | ≥ 50 GB | Raw scenes + processed outputs |
+| Requirement   | Version  | Notes                          |
+| ------------- | -------- | ------------------------------ |
+| Python        | 3.12+    | Tested on 3.12.6               |
+| ESA SNAP      | 10.0+    | For SAR preprocessing          |
+| macOS / Linux | —       | Windows not tested             |
+| RAM           | ≥ 8 GB  | Sentinel-1 scenes are large    |
+| Disk          | ≥ 50 GB | Raw scenes + processed outputs |
 
 ### Accounts Required
 
-| Service | Purpose | Cost |
-|---------|---------|------|
-| Copernicus Data Space | Sentinel-1 download | Free |
-| Twilio | SMS alerts | Pay-per-use (~$0.01/SMS) |
-| Gmail | Email alerts | Free (app password required) |
+| Service               | Purpose             | Cost                         |
+| --------------------- | ------------------- | ---------------------------- |
+| Copernicus Data Space | Sentinel-1 download | Free                         |
+| Twilio                | SMS alerts          | Pay-per-use (~$0.01/SMS)     |
+| Gmail                 | Email alerts        | Free (app password required) |
 
 ### ESA SNAP Installation
 
@@ -198,13 +198,13 @@ mkdir -p logs
 
 Place the following files in their respective directories:
 
-| File | Location | Source |
-|------|----------|--------|
-| `south_sudan_dem.tif` | `data/dem/` | Copernicus DEM 30m |
-| `south_sudan_pop_2020_1km.tif` | `data/worldpop/` | WorldPop 2020 |
-| `roads.geojson` | `data/osm/` | OpenStreetMap |
-| `health_facilities.geojson` | `data/osm/` | OpenStreetMap |
-| `villages.geojson` | `data/osm/` | OpenStreetMap |
+| File                             | Location           | Source             |
+| -------------------------------- | ------------------ | ------------------ |
+| `south_sudan_dem.tif`          | `data/dem/`      | Copernicus DEM 30m |
+| `south_sudan_pop_2020_1km.tif` | `data/worldpop/` | WorldPop 2020      |
+| `roads.geojson`                | `data/osm/`      | OpenStreetMap      |
+| `health_facilities.geojson`    | `data/osm/`      | OpenStreetMap      |
+| `villages.geojson`             | `data/osm/`      | OpenStreetMap      |
 
 ---
 
@@ -253,6 +253,7 @@ SNAP_GPT_PATH=/Applications/esa-snap/bin/gpt
 ### Gmail App Password
 
 Gmail requires an App Password (not your regular password) for SMTP:
+
 1. Go to https://myaccount.google.com/security
 2. Enable 2-Factor Authentication
 3. Search for "App passwords"
@@ -262,6 +263,7 @@ Gmail requires an App Password (not your regular password) for SMTP:
 ### Twilio Kenya SMS
 
 To send SMS to Kenyan numbers (`+254`):
+
 1. Log in to https://console.twilio.com
 2. Go to **Messaging → Settings → Geo Permissions**
 3. Find **Kenya (KE)** and enable it
@@ -358,14 +360,14 @@ Central configuration dataclass. Loads all credentials from `.env`, validates fi
 
 SQLite `DatabaseManager` with 6 tables:
 
-| Table | Purpose |
-|-------|---------|
-| `events` | One row per processed Sentinel-1 scene |
-| `processing_logs` | Per-stage timing and status |
-| `flood_masks` | GeoTIFF paths and flood extent |
-| `affected_villages` | Risk-scored village records |
-| `infrastructure_impacts` | Roads and health facilities |
-| `alerts` | SMS and email delivery records |
+| Table                      | Purpose                                |
+| -------------------------- | -------------------------------------- |
+| `events`                 | One row per processed Sentinel-1 scene |
+| `processing_logs`        | Per-stage timing and status            |
+| `flood_masks`            | GeoTIFF paths and flood extent         |
+| `affected_villages`      | Risk-scored village records            |
+| `infrastructure_impacts` | Roads and health facilities            |
+| `alerts`                 | SMS and email delivery records         |
 
 ### `src/data_acquisition.py`
 
@@ -374,6 +376,7 @@ Downloads new Sentinel-1 IW GRD scenes from ESA Copernicus Data Space API. Maint
 ### `src/preprocessing.py`
 
 SNAP GPT preprocessing pipeline:
+
 1. Apply Orbit File (precise orbit correction)
 2. Thermal Noise Removal
 3. Calibration (sigma0 backscatter)
@@ -385,6 +388,7 @@ SNAP GPT preprocessing pipeline:
 ### `src/flood_detection.py`
 
 6-stage threshold-based SAR flood detector:
+
 1. Otsu threshold on backscatter histogram
 2. GMM loose threshold (2-component Gaussian)
 3. Change detection vs baseline scene
@@ -395,6 +399,7 @@ SNAP GPT preprocessing pipeline:
 ### `src/risk_assessment.py`
 
 Overlays flood mask with humanitarian datasets:
+
 - **WorldPop** (100m): estimates affected population per village
 - **OSM roads**: identifies inaccessible road segments + alternative routes
 - **OSM health facilities**: flags at-risk clinics, hospitals, health posts
@@ -403,6 +408,7 @@ Overlays flood mask with humanitarian datasets:
 ### `src/alerts.py`
 
 Dual-channel alert dispatch:
+
 - **SMS** via Twilio REST API — concise 160-char message, sent first
 - **Email** via Gmail SSL (port 465) — full HTML situation report
 - Retry logic: 2 attempts per recipient before marking failed
@@ -411,6 +417,7 @@ Dual-channel alert dispatch:
 ### `src/pipeline.py`
 
 End-to-end orchestrator. Calls all modules in sequence with:
+
 - Per-stage timing via `_timed_stage()` wrapper
 - Per-scene try/except — one failure doesn't abort the run
 - Full database logging at each stage
@@ -426,27 +433,29 @@ Random Forest pixel classifier that improves on threshold-based detection.
 
 **Feature set (11 features per pixel):**
 
-| # | Feature | Description |
-|---|---------|-------------|
-| 1 | VH backscatter | Raw SAR signal (primary flood indicator) |
-| 2 | Local mean 3×3 | Smoothed neighbourhood backscatter |
-| 3 | Local mean 7×7 | Wider context window |
-| 4 | Local std 3×3 | Texture roughness |
-| 5 | Local range 5×5 | Local contrast |
-| 6 | Gradient magnitude | Edge strength |
-| 7 | Sobel X | Horizontal edges |
-| 8 | Sobel Y | Vertical edges |
-| 9 | Laplacian | Second-order edges |
-| 10 | Percentile rank | Relative intensity within local window |
-| 11 | Z-score | Scene-normalised backscatter |
+| #  | Feature            | Description                              |
+| -- | ------------------ | ---------------------------------------- |
+| 1  | VH backscatter     | Raw SAR signal (primary flood indicator) |
+| 2  | Local mean 3×3    | Smoothed neighbourhood backscatter       |
+| 3  | Local mean 7×7    | Wider context window                     |
+| 4  | Local std 3×3     | Texture roughness                        |
+| 5  | Local range 5×5   | Local contrast                           |
+| 6  | Gradient magnitude | Edge strength                            |
+| 7  | Sobel X            | Horizontal edges                         |
+| 8  | Sobel Y            | Vertical edges                           |
+| 9  | Laplacian          | Second-order edges                       |
+| 10 | Percentile rank    | Relative intensity within local window   |
+| 11 | Z-score            | Scene-normalised backscatter             |
 
 **Model configuration:**
+
 - `RandomForestClassifier(n_estimators=200, class_weight="balanced", oob_score=True)`
 - Probability threshold: 0.45 (tuned for high recall — humanitarian context)
 - Subsampled training: max 50,000 pixels per scene
 - Chunk-based prediction for large rasters (500,000 pixels/chunk)
 
 **Self-test results (synthetic data):**
+
 ```
 OOB accuracy:    0.9999
 Top feature:     local_mean_7x7 (35.5%)
@@ -454,6 +463,7 @@ Training time:   ~18 seconds (225,000 pixels, 200 trees)
 ```
 
 **Usage:**
+
 ```python
 from src.ml_flood_detection import MLFloodDetector
 
@@ -490,6 +500,7 @@ Dashboard: http://localhost:8501
 ### Email Alert
 
 Full HTML situation report including:
+
 - KPI cards (flood extent, affected population, high-risk villages, roads blocked)
 - Affected villages table (top 10 with population and risk %)
 - Inaccessible roads list with alternative routes
@@ -499,6 +510,7 @@ Full HTML situation report including:
 ### Alert Thresholds
 
 Alerts fire when **either** condition is met:
+
 - Flood extent ≥ 500 ha (configurable via `ALERT_FLOOD_THRESHOLD_HA`)
 - Affected population ≥ 1,000 (configurable via `ALERT_POPULATION_THRESHOLD`)
 
@@ -532,12 +544,12 @@ pytest tests/ -m "integration" -v
 
 ### Test Summary
 
-| Test File | Tests | What It Covers |
-|-----------|-------|----------------|
-| `test_data_acquisition.py` | 25 | Scene download, registry, AOI validation |
-| `test_preprocessing.py` | 26 | SNAP GPT pipeline, output validation |
-| `test_pipeline.py` | 48 | AlertManager, FloodPipeline, thresholds, formatting |
-| **Total** | **99** | **All passing** |
+| Test File                    | Tests        | What It Covers                                      |
+| ---------------------------- | ------------ | --------------------------------------------------- |
+| `test_data_acquisition.py` | 25           | Scene download, registry, AOI validation            |
+| `test_preprocessing.py`    | 26           | SNAP GPT pipeline, output validation                |
+| `test_pipeline.py`         | 48           | AlertManager, FloodPipeline, thresholds, formatting |
+| **Total**              | **99** | **All passing**                               |
 
 ---
 
@@ -568,27 +580,27 @@ tail -f ~/suddwatch/logs/launchd_stdout.log
 
 ## 14. Data Sources
 
-| Dataset | Provider | Resolution | Update |
-|---------|---------|------------|--------|
-| Sentinel-1 SAR | ESA Copernicus | 10 m | ~6 days |
-| CHIRPS Rainfall | UCSB / FEWS | 5 km | Daily |
-| Copernicus DEM | ESA / Copernicus | 30 m | Static |
-| WorldPop Population | WorldPop/Southampton | 100 m | Annual |
-| OSM Roads | OpenStreetMap | Vector | Continuous |
-| OSM Health Facilities | OpenStreetMap | Vector | Continuous |
-| OSM Villages | OpenStreetMap | Vector | Continuous |
-| Humanitarian Reports | ReliefWeb / OCHA | — | Continuous |
+| Dataset               | Provider             | Resolution | Update     |
+| --------------------- | -------------------- | ---------- | ---------- |
+| Sentinel-1 SAR        | ESA Copernicus       | 10 m       | ~6 days    |
+| CHIRPS Rainfall       | UCSB / FEWS          | 5 km       | Daily      |
+| Copernicus DEM        | ESA / Copernicus     | 30 m       | Static     |
+| WorldPop Population   | WorldPop/Southampton | 100 m      | Annual     |
+| OSM Roads             | OpenStreetMap        | Vector     | Continuous |
+| OSM Health Facilities | OpenStreetMap        | Vector     | Continuous |
+| OSM Villages          | OpenStreetMap        | Vector     | Continuous |
+| Humanitarian Reports  | ReliefWeb / OCHA     | —         | Continuous |
 
 ---
 
 ## 15. Sprint History
 
-| Sprint | Deliverables | Status |
-|--------|-------------|--------|
-| **Sprint 1** | `config.py`, `database.py`, `data_acquisition.py`, `preprocessing.py`, 51 unit tests | ✅ Complete |
-| **Sprint 2** | `flood_detection.py`, `risk_assessment.py`, Streamlit dashboard (4 pages, SVG map) | ✅ Complete |
+| Sprint             | Deliverables                                                                                               | Status      |
+| ------------------ | ---------------------------------------------------------------------------------------------------------- | ----------- |
+| **Sprint 1** | `config.py`, `database.py`, `data_acquisition.py`, `preprocessing.py`, 51 unit tests               | ✅ Complete |
+| **Sprint 2** | `flood_detection.py`, `risk_assessment.py`, Streamlit dashboard (4 pages, SVG map)                     | ✅ Complete |
 | **Sprint 3** | `alerts.py` (SMS+Email confirmed), `pipeline.py`, `run_pipeline.py`, `CRON_SETUP.md`, 48 new tests | ✅ Complete |
-| **Sprint 4** | `ml_flood_detection.py` (Random Forest, OOB=0.9999), Intelligence Feed (ReliefWeb RSS), `README.md` | ✅ Complete |
+| **Sprint 4** | `ml_flood_detection.py` (Random Forest, OOB=0.9999), Intelligence Feed (ReliefWeb RSS), `README.md`    | ✅ Complete |
 
 **Total: 99/99 tests passing across all sprints.**
 
@@ -596,13 +608,13 @@ tail -f ~/suddwatch/logs/launchd_stdout.log
 
 ## 16. Academic Context
 
-| Field | Value |
-|-------|-------|
-| **Student** | Madut Chan (671336) |
-| **Course** | SWE3090 — Software Engineering Project |
-| **Semester** | Summer 2026 |
-| **Institution** | Strathmore University |
-| **Repository** | https://github.com/Billawan12/suddwatch |
+| Field                 | Value                                   |
+| --------------------- | --------------------------------------- |
+| **Student**     | Madut Chan (671336)                     |
+| **Course**      | SWE3090 — Software Engineering Project |
+| **Semester**    | Summer 2026                             |
+| **Institution** | USIU-AFRICA                             |
+| **Repository**  | https://github.com/Billawan12/suddwatch |
 
 ### System Objectives
 
@@ -622,5 +634,5 @@ SuddWatch targets the **60-minute detection-to-alert SLA** — the threshold at 
 
 ---
 
-*SuddWatch is developed as part of SWE3090 at Strathmore University, Summer 2026.*
+*SuddWatch is developed as part of SWE3090 at USIU-AFRICA, Summer 2026.*
 *Built with Python, Streamlit, ESA SNAP, Twilio, and ReliefWeb/OCHA data.*
