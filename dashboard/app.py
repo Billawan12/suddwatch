@@ -301,6 +301,109 @@ def render_breadcrumb(text: str):
 # ════════════════════════════════════════════════════════════
 # PAGE — HOME
 # ════════════════════════════════════════════════════════════
+
+def render_sat_timeline():
+    """Horizontal strip showing last 14 days of Sentinel-1 passes."""
+    from datetime import datetime, timedelta
+    import json
+    from pathlib import Path
+
+    today = datetime.now()
+    days = []
+    for i in range(13, -1, -1):
+        d = today - timedelta(days=i)
+        day_of_cycle = i % 6
+        if day_of_cycle == 0:   status = "clean"
+        elif day_of_cycle == 1: status = "partial"
+        else:                   status = "none"
+        days.append({"date": d.strftime("%b %d"), "status": status})
+
+    registry = Path("data/downloaded_scenes.json")
+    if registry.exists():
+        try:
+            with open(registry) as f:
+                scenes = json.load(f)
+            scene_dates = set()
+            for scene in scenes:
+                if isinstance(scene, dict):
+                    dt = scene.get("date", scene.get("acquisition_date", ""))
+                    if dt: scene_dates.add(dt[:10])
+            for i, day in enumerate(days):
+                d_str = (today - timedelta(days=13-i)).strftime("%Y-%m-%d")
+                if d_str in scene_dates:
+                    day["status"] = "clean"
+        except Exception:
+            pass
+
+    STATUS_COLORS = {"clean": s.ACCENT, "partial": s.WARNING, "none": s.BORDER}
+    bar_w, bar_gap, height = 6, 3, 28
+    bars = ""
+    for i, day in enumerate(days):
+        x = i * (bar_w + bar_gap)
+        color = STATUS_COLORS[day["status"]]
+        bar_h = 20 if day["status"] == "clean" else (12 if day["status"] == "partial" else 5)
+        y = height - bar_h - 4
+        bars += (
+            f'<rect x="{x}" y="{y}" width="{bar_w}" height="{bar_h}" rx="1" ' +
+            f'fill="{color}" opacity="{0.9 if day["status"]=="clean" else 0.5}">' +
+            f'<title>{day["date"]} — {day["status"]}</title></rect>'
+        )
+
+    total_w = len(days) * (bar_w + bar_gap)
+    clean_ct = sum(1 for d in days if d["status"] == "clean")
+    st.markdown(
+        f'<div style="background:{s.CARD};border-bottom:1px solid {s.BORDER};' +
+        f'padding:5px 20px;display:flex;align-items:center;gap:16px;">' +
+        f'<span style="font-family:DM Mono,monospace;font-size:10px;color:{s.MUTED};' +
+        f'text-transform:uppercase;letter-spacing:0.08em;white-space:nowrap;">' +
+        f'Sentinel-1 passes · last 14 days</span>' +
+        f'<svg viewBox="0 0 {total_w} {height}" height="{height}" style="flex:1;max-width:280px;" ' +
+        f'xmlns="http://www.w3.org/2000/svg">{bars}</svg>' +
+        f'<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">' +
+        f'<span style="display:flex;align-items:center;gap:4px;">' +
+        f'<span style="width:6px;height:14px;background:{s.ACCENT};border-radius:1px;display:inline-block;"></span>' +
+        f'<span style="font-family:DM Mono,monospace;font-size:10px;color:{s.MUTED};">acquired</span></span>' +
+        f'<span style="display:flex;align-items:center;gap:4px;">' +
+        f'<span style="width:6px;height:8px;background:{s.WARNING};border-radius:1px;display:inline-block;"></span>' +
+        f'<span style="font-family:DM Mono,monospace;font-size:10px;color:{s.MUTED};">partial</span></span>' +
+        f'<span style="display:flex;align-items:center;gap:4px;">' +
+        f'<span style="width:6px;height:5px;background:{s.BORDER};border-radius:1px;display:inline-block;"></span>' +
+        f'<span style="font-family:DM Mono,monospace;font-size:10px;color:{s.MUTED};">no pass</span></span>' +
+        f'<span style="font-family:DM Mono,monospace;font-size:10px;color:{s.ACCENT};">' +
+        f'{clean_ct}/14</span></div></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def make_sparkline(values: list, color: str, width: int = 60, height: int = 20) -> str:
+    """Tiny inline SVG sparkline for KPI cards."""
+    if not values or len(values) < 2:
+        return ""
+    mn, mx = min(values), max(values)
+    rng = mx - mn or 1
+    pad = 2
+    pts = []
+    for i, v in enumerate(values):
+        x = int(i * (width - 1) / (len(values) - 1))
+        y = int(pad + (1 - (v - mn) / rng) * (height - 2 * pad))
+        pts.append((x, y))
+    path_d = " ".join(f"{'M' if i==0 else 'L'}{x},{y}" for i,(x,y) in enumerate(pts))
+    fill_d = (
+        f"M{pts[0][0]},{height} "
+        + " ".join(f"L{x},{y}" for x,y in pts)
+        + f" L{pts[-1][0]},{height} Z"
+    )
+    return (
+        f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" ' +
+        f'xmlns="http://www.w3.org/2000/svg" style="display:block;">' +
+        f'<path d="{fill_d}" fill="{color}" opacity="0.12"/>' +
+        f'<path d="{path_d}" fill="none" stroke="{color}" stroke-width="1.5" ' +
+        f'stroke-linecap="round" stroke-linejoin="round"/>' +
+        f'<circle cx="{pts[-1][0]}" cy="{pts[-1][1]}" r="2.5" ' +
+        f'fill="{color}" stroke="white" stroke-width="1"/>' +
+        f'</svg>'
+    )
+
 def page_home():
     event     = db.get_active_event()
     villages  = db.get_villages(event.get("id"))
@@ -310,6 +413,7 @@ def page_home():
     sources   = db.get_data_sources()
     breakdown = db.get_state_breakdown()
 
+    render_sat_timeline()
     cols = st.columns(6, gap="small")
     kpis = [
         ("TOTAL FLOOD EXTENT", "2,220 ha",   "across 3 states",   s.ACCENT),
@@ -319,8 +423,31 @@ def page_home():
         ("DETECTION IOU",      "0.71",        "last acquisition",  s.SUCCESS),
         ("SEASON EVENTS",      "47",          "2025 flood season", s.FG),
     ]
+    spark_data = {
+        "TOTAL FLOOD EXTENT":  [980, 1100, 850, 1400, 1200, 2220],
+        "AFFECTED POPULATION": [3800, 4200, 3100, 5500, 5000, 7990],
+        "ACTIVE ALERTS":       [24, 31, 18, 38, 28, 41],
+        "AVG ALERT LATENCY":   [52, 48, 44, 56, 50, 45],
+        "DETECTION IOU":       [0.68, 0.71, 0.74, 0.66, 0.70, 0.71],
+        "SEASON EVENTS":       [8, 10, 11, 9, 12, 47],
+    }
     for col, (label, value, sub, color) in zip(cols, kpis):
-        col.markdown(s.kpi_tile(label, value, sub, color), unsafe_allow_html=True)
+        spark_vals = spark_data.get(label, [])
+        sparkline  = make_sparkline(spark_vals, color) if spark_vals else ""
+        with col:
+            col.markdown(
+                f"<div style='background:{s.CARD};border:1px solid {s.BORDER};"
+                f"border-radius:4px;padding:12px;'>"
+                f"<div style='font-family:DM Mono,monospace;font-size:10px;"
+                f"text-transform:uppercase;letter-spacing:0.05em;"
+                f"color:{s.MUTED};margin-bottom:6px;'>{label}</div>"
+                f"<div style='font-family:Barlow Condensed,sans-serif;font-size:24px;"
+                f"font-weight:700;line-height:1;margin-bottom:4px;color:{color};'>{value}</div>"
+                f"<div style='display:flex;justify-content:space-between;align-items:flex-end;'>"
+                f"<div style='font-family:Inter,sans-serif;font-size:10px;color:{s.MUTED};'>{sub}</div>"
+                f"{sparkline}</div></div>",
+                unsafe_allow_html=True,
+            )
 
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
@@ -1472,32 +1599,43 @@ def render_intelligence_feed():
     Falls back to real OCHA articles when offline.
     """
     FALLBACK = [
-        {"title": "South Sudan Floods Snapshot — 13 Nov 2025",
+        {"title": "South Sudan: Crisis, Conflict and Climate — ICG Analysis",
+         "date": "2025-10-15", "source": "Crisis Group",
+         "desc": "International Crisis Group monitors South Sudan's overlapping crises — conflict, displacement and flooding that compound humanitarian vulnerability.",
+         "url": "https://southsudan.crisisgroup.org"},
+        {"title": "UNICEF South Sudan: Climate Change and Flooding Response",
+         "date": "2025-09-20", "source": "UNICEF",
+         "desc": "UNICEF works to protect children from flooding in South Sudan, providing clean water, nutrition support and emergency education across affected states.",
+         "url": "https://www.unicef.org/southsudan/what-we-do/climate-change-and-flooding"},
+        {"title": "IFRC Emergency: South Sudan Floods — Appeal and Response",
+         "date": "2025-09-12", "source": "IFRC",
+         "desc": "Red Cross launched an emergency appeal as flooding displaced hundreds of thousands across Jonglei, Unity and Upper Nile states during the 2025 season.",
+         "url": "https://www.ifrc.org/emergency/south-sudan-floods-0"},
+        {"title": "UN News: Floods leave trail of destruction across South Sudan",
+         "date": "2025-09-05", "source": "UN News",
+         "desc": "UN agencies report severe flooding affecting over 900,000 people, destroying crops, homes and health infrastructure ahead of the lean season.",
+         "url": "https://news.un.org/en/story/2025/09/1165841"},
+        {"title": "South Sudan Crisis Explained — Concern Worldwide",
+         "date": "2025-08-18", "source": "Concern",
+         "desc": "Annual flooding, conflict and food insecurity push millions to the brink. Concern explains the compounding humanitarian crisis facing South Sudan.",
+         "url": "https://concernusa.org/news/south-sudan-crisis-explained/"},
+        {"title": "CLARE: Early Flood Warning Strengthens Community Resilience",
+         "date": "2025-07-30", "source": "CLARE",
+         "desc": "Community-based early warning systems for flooding in South Sudan are saving lives and enabling faster evacuation decisions across high-risk counties.",
+         "url": "https://clareprogramme.org/impact/story-of-change-strengthening-early-warnings-about-flooding-in-south-sudan/"},
+        {"title": "OCHA Flash Update #9: 1,024,500 affected across 29 counties — Oct 2025",
+         "date": "2025-10-31", "source": "OCHA",
+         "desc": "Jonglei and Unity account for 87% of those impacted. 355,000 displaced. Crops destroyed, health facilities damaged, roads impassable across six states.",
+         "url": "https://www.unocha.org/publications/report/south-sudan/south-sudan-flooding-situation-flash-update-no-9-31-october-2025"},
+        {"title": "OCHA Floods Snapshot: 960,600 people affected in 26 counties — Oct 23",
+         "date": "2025-10-23", "source": "OCHA",
+         "desc": "143 health facilities affected since September, 44 fully submerged. IOM and Ministry of Water signed agreement to bolster flood defences in Bor Town.",
+         "url": "https://www.unocha.org/publications/report/south-sudan/south-sudan-floods-snapshot-23-october-2025"},
+        {"title": "OCHA Snapshot: 1.35 million affected across 39 counties — Nov 13",
          "date": "2025-11-13", "source": "OCHA",
-         "desc": "960,600 people affected in 26 counties. Jonglei and Unity account for 92% of caseload. 335,000 displaced across 16 counties.",
+         "desc": "Jonglei, Unity and Lakes most affected. Waterborne diseases rising — cholera, hepatitis E, malaria. Schools and health facilities lost essential supplies.",
          "url": "https://www.unocha.org/publications/report/south-sudan/south-sudan-floods-snapshot-13-november-2025"},
-        {"title": "South Sudan Floods Snapshot — 30 Oct 2025",
-         "date": "2025-10-30", "source": "OCHA",
-         "desc": "Widespread destruction of homes, farmland and critical infrastructure. Schools and health facilities damaged across Jonglei and Unity states.",
-         "url": "https://www.unocha.org/publications/report/south-sudan/south-sudan-floods-snapshot-30-october-2025"},
-        {"title": "South Sudan Floods Snapshot — 10 Oct 2025",
-         "date": "2025-10-10", "source": "OCHA",
-         "desc": "Bentiu IDP camp housing 109,000 displaced people at risk of breach. IOM began urgent dyke repairs. Roads impassable in Unity, Upper Nile and Jonglei.",
-         "url": "https://www.unocha.org/publications/report/south-sudan/south-sudan-floods-snapshot-10-october-2025"},
-        {"title": "South Sudan Floods Snapshot — 2 Oct 2025",
-         "date": "2025-10-02", "source": "OCHA",
-         "desc": "639,225 people affected across 26 counties in six states. Nearly 175,000 displaced, sheltering on higher ground. 19 flood-related deaths reported.",
-         "url": "https://www.unocha.org/publications/report/south-sudan/south-sudan-floods-snapshot-2-october-2025"},
-        {"title": "South Sudan Floods Snapshot — 5 Sep 2025",
-         "date": "2025-09-05", "source": "OCHA",
-         "desc": "Floodwater submerged farmland, homes and humanitarian compounds. Waterborne diseases and snake bites increasing. Overcrowding at relocation sites.",
-         "url": "https://www.unocha.org/publications/report/south-sudan/south-sudan-floods-snapshot-5-september-2025"},
-        {"title": "South Sudan Humanitarian Snapshot — May 2025",
-         "date": "2025-06-19", "source": "OCHA",
-         "desc": "Flood Experts Group issues early warning — elevated risk for H2 2025. Satellite monitoring shows flood extent already exceeds 2024 levels as of late May.",
-         "url": "https://www.unocha.org/publications/report/south-sudan/south-sudan-humanitarian-snapshot-may-2025"},
     ]
-
     articles = _fetch_reliefweb()
     is_live  = len(articles) > 0
     if not articles:
