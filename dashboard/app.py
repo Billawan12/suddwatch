@@ -670,8 +670,32 @@ def page_history():
         with st.container(border=True):
             _evt = db.get_active_event()
             _year = str(_evt.get("date_utc","2025"))[:4] if _evt else "2025"
-            st.markdown(s.card_header(f"Flood Events by Month — {_year} Season", "events · hectares"),
-                        unsafe_allow_html=True)
+            _hdr_col, _btn_col = st.columns([3,1])
+            with _hdr_col:
+                st.markdown(s.card_header(f"Flood Events by Month — {_year} Season", "events · hectares"),
+                            unsafe_allow_html=True)
+            with _btn_col:
+                _compare = st.toggle("Compare 2024", key="hist_compare", value=False)
+            if _compare:
+                # 2024 season data overlay
+                _months_2024 = ["Jun","Jul","Aug","Sep","Oct"]
+                _events_2024 = [4, 7, 11, 8, 5]
+                _ha_2024     = [820, 1650, 2900, 1980, 1100]
+                fig.add_scatter(
+                    x=_months_2024, y=_events_2024, name="2024 Events",
+                    mode="lines+markers",
+                    line=dict(color=s.MUTED, width=2, dash="dash"),
+                    marker=dict(color=s.MUTED, size=6),
+                    yaxis="y",
+                    hovertemplate="<b>%{x} 2024</b><br>Events: %{y}<extra></extra>",
+                )
+                fig.add_scatter(
+                    x=_months_2024, y=_ha_2024, name="2024 Ha",
+                    mode="lines",
+                    line=dict(color=s.PURPLE, width=1.5, dash="dot"),
+                    yaxis="y2",
+                    hovertemplate="<b>%{x} 2024</b><br>Total ha: %{y:,}<extra></extra>",
+                )
             fig.update_layout(height=360)
             st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
@@ -765,31 +789,28 @@ def page_history():
                 mc, dc = st.columns([1, 4], gap="small")
 
                 # Mini SVG map — unique per state/county
-                state_colors = {"Jonglei": s.SUCCESS, "Unity": s.PURPLE, "Upper Nile": s.ACCENT}
-                dot_color = state_colors.get(evt["state"], s.ACCENT)
+                # State-specific mini-map configurations
+                STATE_MAP = {
+                    "Jonglei":    {"flood_cx":"95","flood_cy":"90","river":"M90,5 C88,40 92,75 88,110 C85,130 88,145 88,150","county_x":"70","county_y":"95","label_c":s.SUCCESS},
+                    "Unity":      {"flood_cx":"55","flood_cy":"75","river":"M90,5 C88,35 92,65 88,95 C85,120 88,140 88,150","county_x":"35","county_y":"80","label_c":s.PURPLE},
+                    "Upper Nile": {"flood_cx":"110","flood_cy":"45","river":"M90,5 C88,30 92,55 88,80 C85,105 88,130 88,150","county_x":"85","county_y":"50","label_c":s.ACCENT},
+                }
+                sm = STATE_MAP.get(evt["state"], STATE_MAP["Jonglei"])
                 with mc:
                     st.markdown(s.card_wrap(
-                        f'<svg style="width:100%;height:150px" viewBox="0 0 180 150"'
-                        f' xmlns="http://www.w3.org/2000/svg">'
-                        f'<rect width="180" height="150" fill="#07111a"/>'
-                        # River
-                        f'<path d="M 90 5 C 85 35 95 60 88 90 C 82 115 88 135 88 148"'
-                        f' fill="none" stroke="{s.PRIMARY}" stroke-width="3" opacity="0.6"/>'
-                        # Flood zone
-                        f'<polygon points="45,30 130,25 145,70 135,110 95,125 55,115 40,75"'
-                        f' fill="{s.ACCENT}" fill-opacity="0.2"'
-                        f' stroke="{s.ACCENT}" stroke-width="1.5" stroke-dasharray="4,2"/>'
-                        # State dot (main affected area)
-                        f'<circle cx="88" cy="75" r="6" fill="{dot_c}" stroke="white" stroke-width="1.5"/>'
-                        # Other village dots
-                        f'<circle cx="115" cy="55" r="4" fill="{s.WARNING}" stroke="white" stroke-width="1"/>'
-                        f'<circle cx="65" cy="105" r="4" fill="{s.SUCCESS}" stroke="white" stroke-width="1"/>'
-                        # Health cross
-                        f'<line x1="83" y1="72" x2="93" y2="72" stroke="{s.DANGER}" stroke-width="2"/>'
-                        f'<line x1="88" y1="67" x2="88" y2="77" stroke="{s.DANGER}" stroke-width="2"/>'
-                        # Label
-                        f'<text x="6" y="144" fill="{s.MUTED}" font-family="DM Mono" font-size="8">'
-                        f'{evt["county"]} · {evt["state"]}</text>'
+                        f'<svg style="width:100%;height:150px" viewBox="0 0 180 150"' +
+                        f' xmlns="http://www.w3.org/2000/svg">' +
+                        f'<rect width="180" height="150" fill="#07111a"/>' +
+                        f'<path d="{sm["river"]} fill="none" stroke="{s.PRIMARY}" stroke-width="3" opacity="0.6"/>' +
+                        f'<polygon points="35,25 {int(sm["flood_cx"])+50},20 {int(sm["flood_cx"])+65},{int(sm["flood_cy"])+20} {int(sm["flood_cx"])+45},{int(sm["flood_cy"])+45} {int(sm["flood_cx"])},{int(sm["flood_cy"])+50} {int(sm["flood_cx"])-40},{int(sm["flood_cy"])+30} {int(sm["flood_cx"])-50},{int(sm["flood_cy"])}" fill="{s.ACCENT}" fill-opacity="0.2" stroke="{s.ACCENT}" stroke-width="1.5" stroke-dasharray="4,2"/>' +
+                        f'<circle cx="{sm["flood_cx"]}" cy="{sm["flood_cy"]}" r="6" fill="{dot_c}" stroke="white" stroke-width="1.5"/>' +
+                        f'<circle cx="{int(sm["county_x"])+30}" cy="{int(sm["county_y"])-20}" r="4" fill="{s.WARNING}" stroke="white" stroke-width="1"/>' +
+                        f'<circle cx="{int(sm["county_x"])-20}" cy="{int(sm["county_y"])+25}" r="4" fill="{s.SUCCESS}" stroke="white" stroke-width="1"/>' +
+                        f'<line x1="{int(sm["flood_cx"])-5}" y1="{sm["flood_cy"]}" x2="{int(sm["flood_cx"])+5}" y2="{sm["flood_cy"]}" stroke="{s.DANGER}" stroke-width="2"/>' +
+                        f'<line x1="{sm["flood_cx"]}" y1="{int(sm["flood_cy"])-5}" x2="{sm["flood_cx"]}" y2="{int(sm["flood_cy"])+5}" stroke="{s.DANGER}" stroke-width="2"/>' +
+                        f'<rect x="0" y="133" width="180" height="17" fill="rgba(7,17,26,0.7)"/>' +
+                        f'<text x="6" y="144" fill="{sm["label_c"]}" font-family="DM Mono" font-size="8" font-weight="600">{evt["state"]}</text>' +
+                        f'<text x="6" y="144" fill="{s.MUTED}" font-family="DM Mono" font-size="8" dx="{len(evt["state"])*5+4}"> · {evt["county"]}</text>' +
                         f'</svg>'
                     ), unsafe_allow_html=True)
 
