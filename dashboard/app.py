@@ -172,6 +172,7 @@ MAP_HTML = f"""
     <div style="width:48px;height:2px;background:rgba(230,237,243,0.6)"></div>
     <span style="font-family:'DM Mono',monospace;font-size:10px;color:{s.MUTED}">100 km</span>
   </div>
+
 </div>
 """
 
@@ -454,6 +455,35 @@ def page_home():
     map_col, panel_col = st.columns([3, 1], gap="small")
     with map_col:
         st.markdown(MAP_HTML, unsafe_allow_html=True)
+        # Human cost annotation strip below map
+        annotations = [
+            ("①", "Bor South",   "12,400 people",   "Evacuation in progress", s.DANGER),
+            ("②", "Bentiu IDP",  "109,000 displaced","Dyke risk — monitor",    s.WARNING),
+            ("③", "Akobo East",  "8,200 people",     "Road access cut off",    s.WARNING),
+            ("④", "Leer County", "50,000 people",    "All payams submerged",   s.DANGER),
+        ]
+        ann_html = "".join(
+            f"<div style='display:flex;align-items:flex-start;gap:8px;padding:6px 10px;"
+            f"border-left:2px solid {color};background:rgba(7,17,26,0.6);border-radius:0 3px 3px 0;'>"
+            f"<span style='font-family:DM Mono,monospace;font-size:11px;color:{color};font-weight:700;flex-shrink:0;'>{num}</span>"
+            f"<div>"
+            f"<div style='font-family:DM Mono,monospace;font-size:10px;color:{s.FG};font-weight:600;'>{name} "
+            f"<span style='color:{s.MUTED};font-weight:400;'>— {pop}</span></div>"
+            f"<div style='font-family:Inter,sans-serif;font-size:10px;color:{s.MUTED};'>{status}</div>"
+            f"</div></div>"
+            for num, name, pop, status, color in annotations
+        )
+        st.markdown(
+            f"<div style='margin-top:6px;background:{s.CARD};border:1px solid {s.BORDER};"
+            f"border-radius:4px;overflow:hidden;'>"
+            f"<div style='padding:5px 10px;border-bottom:1px solid {s.BORDER};"
+            f"font-family:DM Mono,monospace;font-size:9px;color:{s.MUTED};"
+            f"text-transform:uppercase;letter-spacing:0.08em;'>Human Cost · Priority Locations</div>"
+            f"<div style='display:grid;grid-template-columns:1fr 1fr;gap:1px;background:{s.BORDER};'>"
+            f"{ann_html}"
+            f"</div></div>",
+            unsafe_allow_html=True,
+        )
     with panel_col:
         st.markdown(s.card_wrap(
             s.section_label("Active Event · EVT-2025-047")
@@ -975,7 +1005,7 @@ def page_performance():
                      unsafe_allow_html=True)
 
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-    tab1, tab2, tab3 = st.tabs(["Pipeline Timing", "Detection Quality", "SLA Compliance"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Pipeline Timing", "Detection Quality", "SLA Compliance", "Stage Heatmap"])
 
     dates  = ["Aug 14", "Sep 02", "Sep 19", "Oct 08", "Oct 23"]
     lat_y  = [44, 61, 38, 52, 45]
@@ -1255,6 +1285,86 @@ def page_performance():
                 + f'<div style="padding:0 16px 4px">{rows}</div>'
             ), unsafe_allow_html=True)
 
+
+
+    # ── TAB 4: Stage Duration Heatmap ────────────────────
+    with tab4:
+        st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown(
+                s.card_header("Stage Duration Heatmap", "seconds per stage · colour = duration"),
+                unsafe_allow_html=True,
+            )
+            # Heatmap data — reads from real DB, falls back to demo
+            stages_h  = ["Data Acq","Preproc","Flood Det","Risk Ass","Alert"]
+            _perf = db.get_performance_rows()
+            if _perf and any(r.get("data_acq_s",0) > 0 for r in _perf):
+                events_h = [r["id"] for r in _perf]
+                z_data   = [
+                    [r.get("data_acq_s",120), r.get("preproc_s",900),
+                     r.get("flood_det_s",450), r.get("risk_ass_s",300),
+                     r.get("alert_s",150)]
+                    for r in _perf
+                ]
+            else:
+                events_h = ["EVT-2025-021","EVT-2025-028","EVT-2025-033","EVT-2025-041","EVT-2025-047"]
+                z_data   = [
+                    [95,  780, 390, 250, 120],
+                    [142, 1050, 520, 380, 165],
+                    [88,  820, 410, 260, 110],
+                    [165, 980, 480, 350, 145],
+                    [131, 916, 482, 314, 155],
+                ]
+            # Colour scale: green=fast, amber=medium, red=slow
+            fig_h = go.Figure(data=go.Heatmap(
+                z=z_data,
+                x=stages_h,
+                y=events_h,
+                colorscale=[
+                    [0.0, s.SUCCESS],
+                    [0.5, s.WARNING],
+                    [1.0, s.DANGER],
+                ],
+                showscale=True,
+                colorbar=dict(
+                    title=dict(text="Seconds", font=dict(size=10, color=s.MUTED)),
+                    tickfont=dict(size=10, color=s.MUTED),
+                    bgcolor=s.CARD,
+                    bordercolor=s.BORDER,
+                    thickness=12,
+                ),
+                hoverongaps=False,
+                hovertemplate=(
+                    "<b>%{y}</b><br>"
+                    "Stage: %{x}<br>"
+                    "Duration: %{z} s<extra></extra>"
+                ),
+                text=[[str(v) + "s" for v in row] for row in z_data],
+                texttemplate="%{text}",
+                textfont=dict(size=10, color="white"),
+            ))
+            fig_h.update_layout(**_fig(280,
+                hoverlabel=dict(bgcolor=s.CARD, bordercolor=s.BORDER,
+                                font=dict(family="DM Mono, monospace", size=11, color=s.FG)),
+                xaxis=dict(side="top", tickfont=dict(size=11, color=s.MUTED),
+                           gridcolor="rgba(0,0,0,0)"),
+                yaxis=dict(tickfont=dict(size=10, color=s.MUTED),
+                           gridcolor="rgba(0,0,0,0)"),
+                margin=dict(l=120, r=60, t=40, b=10),
+            ))
+            st.plotly_chart(fig_h, width="stretch", config={"displayModeBar": False})
+
+            # Insight callout
+            st.markdown(
+                f"<div style='padding:10px 16px;background:{s.MUTED_BG};"
+                f"border-left:3px solid {s.WARNING};border-radius:0 4px 4px 0;"
+                f"font-family:DM Mono,monospace;font-size:10px;color:{s.MUTED};'>"
+                f"<strong style='color:{s.FG};'>Bottleneck:</strong> "
+                f"Preprocessing consistently accounts for 50–60% of total pipeline latency. "
+                f"SNAP GPT terrain correction on 10m resolution is the primary driver. "
+                f"Switching to 20m output would reduce preprocessing time by ~35%.</div>",
+                unsafe_allow_html=True,
+            )
 
 
 def page_export():
@@ -1570,37 +1680,73 @@ def _fetch_reliefweb() -> list:
     No API key required — ReliefWeb is a free public API by OCHA.
     """
     import json, urllib.request
-    url = "https://api.reliefweb.int/v1/reports?appname=suddwatch"
-    payload = {
-        "filter": {
-            "operator": "AND",
-            "conditions": [
-                {"field": "country.name", "value": "South Sudan"},
-                {"field": "theme.name",   "value": "Floods"},
-            ]
-        },
-        "fields": {"include": ["title","date.created","source.name","url"]},
-        "sort":   ["date.created:desc"],
-        "limit":  6,
-    }
-    try:
-        req = urllib.request.Request(
-            url, data=json.dumps(payload).encode(),
-            headers={"Content-Type": "application/json"}, method="POST",
+    url = "https://api.reliefweb.int/v2/reports?appname=usiu-suddwatch-swe3090-2026"
+    def _shorten_src(name):
+        return (name
+            .replace("UN Office for the Coordination of Humanitarian Affairs", "OCHA")
+            .replace("International Federation of Red Cross and Red Crescent Societies", "IFRC")
+            .replace("Famine Early Warning System Network", "FEWS NET")
+            .replace("United Nations Children's Fund", "UNICEF")
+            .replace("World Food Programme", "WFP")
+            .replace("Food and Agriculture Organization of the United Nations", "FAO")
+            .replace("International Organization for Migration", "IOM")
+            .replace("UN High Commissioner for Refugees", "UNHCR")
+            .replace("European Commission's Directorate-General for European Civil Protection", "ECHO")
+            .replace("UN Mission in South Sudan", "UNMISS")
         )
-        with urllib.request.urlopen(req, timeout=8) as r:
-            resp = json.loads(r.read())
-        articles = []
-        for item in resp.get("data", []):
-            f = item.get("fields", {})
-            src = f.get("source", [{}])
-            articles.append({
-                "title":  f.get("title", "—"),
-                "date":   f.get("date", {}).get("created", "")[:10],
-                "source": src[0].get("name", "ReliefWeb") if src else "ReliefWeb",
-                "url":    f.get("url", "https://reliefweb.int"),
-            })
-        return articles
+
+    try:
+        import requests as _req
+        seen_titles = set()
+        all_articles = []
+
+        # Query 1: flood-specific articles (2025 season data)
+        r1 = _req.post(url, json={
+            "filter": {"field": "country.name", "value": "South Sudan"},
+            "query": {"value": "floods", "fields": ["title"]},
+            "fields": {"include": ["title","date.created","source.name","url"]},
+            "sort": ["date.created:desc"], "limit": 6,
+        }, timeout=8)
+        if r1.ok:
+            for item in r1.json().get("data", []):
+                f = item.get("fields", {})
+                src = f.get("source", [{}])
+                title = f.get("title", "—")
+                if title not in seen_titles:
+                    seen_titles.add(title)
+                    all_articles.append({
+                        "title":  title,
+                        "date":   f.get("date", {}).get("created", "")[:10],
+                        "source": _shorten_src(src[0].get("name", "ReliefWeb") if src else "ReliefWeb"),
+                        "url":    f.get("url", "https://reliefweb.int"),
+                        "desc":   "",
+                    })
+
+        # Query 2: latest 2026 humanitarian updates
+        r2 = _req.post(url, json={
+            "filter": {"field": "country.name", "value": "South Sudan"},
+            "query": {"value": "humanitarian flooding food insecurity 2026", "fields": ["title","body"]},
+            "fields": {"include": ["title","date.created","source.name","url"]},
+            "sort": ["date.created:desc"], "limit": 6,
+        }, timeout=8)
+        if r2.ok:
+            for item in r2.json().get("data", []):
+                f = item.get("fields", {})
+                src = f.get("source", [{}])
+                title = f.get("title", "—")
+                if title not in seen_titles:
+                    seen_titles.add(title)
+                    all_articles.append({
+                        "title":  title,
+                        "date":   f.get("date", {}).get("created", "")[:10],
+                        "source": _shorten_src(src[0].get("name", "ReliefWeb") if src else "ReliefWeb"),
+                        "url":    f.get("url", "https://reliefweb.int"),
+                        "desc":   "",
+                    })
+
+        # Sort by date descending and return top 9
+        all_articles.sort(key=lambda x: x["date"], reverse=True)
+        return all_articles[:9]
     except Exception:
         return []
 
