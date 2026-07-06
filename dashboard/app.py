@@ -1542,7 +1542,66 @@ def page_export():
                 unsafe_allow_html=True,
             )
 
+            # Live preview before generating
             if not st.session_state.export_done:
+                PREVIEW_DATA = {
+                    "CSV Tabular": (
+                        "event_id,date_utc,flood_ha,affected,state,county\n"
+                        "EVT-2025-047,2025-10-23,1200,5000,Jonglei,Bor South\n"
+                        "EVT-2025-041,2025-10-08,980,4200,Unity,Leer\n"
+                        "EVT-2025-033,2025-09-19,850,3100,Upper Nile,Malakal\n"
+                        "... ({} more rows)",
+                    ),
+                    "GeoJSON": (
+                        '{{"type":"FeatureCollection","features":[\n'
+                        '  {{"type":"Feature","properties":{{"event_id":"EVT-2025-047",\n'
+                        '    "flood_ha":1200,"affected":5000,"state":"Jonglei"}},\n'
+                        '    "geometry":null}},\n'
+                        '  ... ({} more features)\n'
+                        ']}}',
+                    ),
+                    "PDF Report": (
+                        "SUDDWATCH FLOOD SITUATION REPORT\n"
+                        "══════════════════════════════════\n"
+                        "Event: EVT-2025-047  |  2025-10-23\n"
+                        "Flood Extent: 1,200 ha\n"
+                        "Affected: 5,000 people\n"
+                        "State: Jonglei / Bor South\n"
+                        "... (full report: {} pages)",
+                    ),
+                    "GeoTIFF": (
+                        "Binary raster — 10m resolution\n"
+                        "CRS: WGS84 (EPSG:4326)\n"
+                        "Bands: 1 (flood mask: 0=dry, 1=flood)\n"
+                        "Extent: Sudd Basin AOI\n"
+                        "Size: ~{} MB per scene",
+                    ),
+                    "Shapefile (ZIP)": (
+                        "flood_extent.shp + .dbf + .prj + .shx\n"
+                        "Compatible: ArcGIS, QGIS, GRASS GIS\n"
+                        "CRS: WGS84 (EPSG:4326)\n"
+                        "Features: {} flood polygons\n"
+                        "Attributes: event_id, date, area_ha, risk",
+                    ),
+                }
+                _preview_tmpl = PREVIEW_DATA.get(fmt, ("Preview not available",))[0]
+                _n = n_ev if n_ev else 1
+                try:
+                    _preview_txt = _preview_tmpl.format(_n)
+                except Exception:
+                    _preview_txt = _preview_tmpl
+                st.markdown(
+                    f"<div style='margin-bottom:8px;'>"
+                    f"<div style='font-family:DM Mono,monospace;font-size:9px;"
+                    f"color:{s.MUTED};text-transform:uppercase;letter-spacing:0.08em;"
+                    f"margin-bottom:4px;'>Preview · {ext}</div>"
+                    f"<div style='background:#010409;border:1px solid {s.BORDER};"
+                    f"border-radius:4px;padding:8px 10px;font-family:DM Mono,monospace;"
+                    f"font-size:9px;color:{s.MUTED};white-space:pre;line-height:1.6;"
+                    f"max-height:100px;overflow:hidden;'>{_preview_txt}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
                 if st.button("⬇ Generate Export", key="gen_exp",
                              width="stretch", type="primary"):
                     with st.spinner("Preparing export…"):
