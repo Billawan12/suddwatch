@@ -618,7 +618,7 @@ tail -f ~/suddwatch/logs/launchd_stdout.log
 | **Student** | Madut Chan (671336) |
 | **Course** | SWE3090 — Software Engineering Project |
 | **Semester** | Summer 2026 |
-| **Institution** | Strathmore University |
+| **Institution** | USIU-Africa |
 | **Repository** | https://github.com/Billawan12/suddwatch |
 
 ### System Objectives
@@ -641,5 +641,5 @@ SuddWatch targets the **60-minute detection-to-alert SLA** — the threshold at 
 
 ---
 
-*SuddWatch is developed as part of SWE3090 at Strathmore University, Summer 2026.*
+*SuddWatch is developed as part of SWE3090 at USIU-Africa, Summer 2026.*
 *Built with Python, Streamlit, ESA SNAP, Twilio, and ReliefWeb/OCHA data.*
