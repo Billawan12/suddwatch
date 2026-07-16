@@ -28,3 +28,4 @@ models/
 .DS_Store
 dashboard/suddwatch_dash.db
 data/
+dashboard/auth.db
