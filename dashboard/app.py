@@ -3270,6 +3270,13 @@ if not is_logged_in():
     st.stop()
 
 # ── Logged-in: run the original dashboard ────────────────
+st.markdown("""<style>
+[data-testid="stSidebar"]{display:flex!important;}
+[data-testid="stMainBlockContainer"],.block-container{
+    padding:1rem!important;max-width:100%!important;}
+iframe{position:static!important;width:auto!important;
+    height:auto!important;z-index:auto!important;}
+</style>""", unsafe_allow_html=True)
 render_sidebar()
 event    = _cached_active_event()
 last_evt = event.get("date_utc", "—") if event else "—"
