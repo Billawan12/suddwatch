@@ -915,6 +915,7 @@ def page_auth(t):
 [data-testid="stMainBlockContainer"],.block-container{{
   padding:0!important;margin:0!important;max-width:100%!important;}}
 section[data-testid="stMain"]{{padding:0!important;}}
+[data-testid="stSidebar"]{{display:none!important;}}
 #MainMenu,footer,header,[data-testid="stToolbar"],
 [data-testid="stDecoration"],[data-testid="stStatusWidget"],
 [data-testid="stBottom"],[data-testid="stBottomBlockContainer"]{{
@@ -1014,10 +1015,8 @@ border-radius:14px;padding:32px 28px;'>""", unsafe_allow_html=True)
             if submitted:
                 user = auth_login(email, password)
                 if user:
-                    st.session_state.update({
-                        "logged_in": True,
-                        "user": user,
-                    })
+                    st.session_state["logged_in"] = True
+                    st.session_state["user"] = user
                     st.session_state.pop("auth_page", None)
                     st.rerun()
                 else:
