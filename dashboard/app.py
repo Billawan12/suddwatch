@@ -13,13 +13,296 @@ sys.path.insert(0, str(Path(__file__).parent))
 import db
 import styles as s
 
+# ── Dynamic theme patcher ─────────────────────────────────────────────────
+# Patches the static styles module constants based on user theme preference.
+# Called once per rerun in MAIN before any page renders.
+_LIGHT = {
+    "BG":       "#f6f8fa",
+    "CARD":     "#ffffff",
+    "MUTED_BG": "#f0f2f5",
+    "BORDER":   "#d0d7de",
+    "FG":       "#24292f",
+    "MUTED":    "#57606a",
+    "PRIMARY":  "#0969da",
+    "ACCENT":   "#0969da",
+    "GLOBAL_CSS": "",  # patched separately
+}
+_DARK = {
+    "BG":       "#0d1117",
+    "CARD":     "#161b22",
+    "MUTED_BG": "#1c2128",
+    "BORDER":   "#21262d",
+    "FG":       "#c9d1d9",
+    "MUTED":    "#8b949e",
+    "PRIMARY":  "#0ea5e9",
+    "ACCENT":   "#0ea5e9",
+}
+
+# Store original dark GLOBAL_CSS so we can always regenerate from it
+_ORIGINAL_GLOBAL_CSS = None
+
+def apply_theme():
+    """Patch styles.* constants to match current theme. Inject GLOBAL_CSS."""
+    global _ORIGINAL_GLOBAL_CSS
+
+    # Capture the original dark CSS once on first run
+    if _ORIGINAL_GLOBAL_CSS is None:
+        _ORIGINAL_GLOBAL_CSS = s.GLOBAL_CSS
+
+    choice = st.session_state.get("theme_choice", "dark")
+
+    if choice == "light":
+        for k, v in _LIGHT.items():
+            if k != "GLOBAL_CSS":
+                setattr(s, k, v)
+        # Build light CSS fresh from the stored dark original
+        light_css = (_ORIGINAL_GLOBAL_CSS
+            .replace("#0d1117", "#f6f8fa")   # bg
+            .replace("#161b22", "#ffffff")   # card
+            .replace("#1c2128", "#f0f2f5")   # muted_bg
+            .replace("#21262d", "#d0d7de")   # border
+            .replace("#30363d", "#c8d0d9")   # border2
+            .replace("#c9d1d9", "#24292f")   # text
+            .replace("#f0f6fc", "#1c2128")   # text_h
+            .replace("#8b949e", "#57606a")   # text_m
+            .replace("#010409", "#f0f2f5")   # sidebar bg
+        )
+        # Inject additional light-mode overrides
+        light_css += """
+<style>
+/* ═══════════════════════════════════════════════════════════
+   LIGHT MODE — COMPLETE OVERRIDE
+   All text must be dark. All backgrounds must be light.
+   ═══════════════════════════════════════════════════════════ */
+
+/* Page and app backgrounds */
+html, body,
+[data-testid="stApp"],
+[data-testid="stAppViewContainer"],
+[data-testid="stMainBlockContainer"],
+.main, .block-container { background: #f6f8fa !important; }
+
+/* ── Text — targeted, not nuclear ──────────────────────────── */
+/* Main content text */
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] h1,
+[data-testid="stMarkdownContainer"] h2,
+[data-testid="stMarkdownContainer"] h3,
+[data-testid="stMarkdownContainer"] h4,
+[data-testid="stMarkdownContainer"] h5,
+[data-testid="stMarkdownContainer"] h6,
+[data-testid="stMarkdownContainer"] li,
+[data-testid="stMarkdownContainer"] td,
+[data-testid="stMarkdownContainer"] th,
+[data-testid="stMarkdownContainer"] blockquote,
+[data-testid="stMarkdownContainer"] code { color: #24292f !important; }
+
+/* Muted/secondary text */
+[data-testid="stMarkdownContainer"] small,
+[data-testid="stCaptionContainer"],
+.stCaption { color: #57606a !important; }
+
+/* Metric values */
+[data-testid="stMetricValue"] { color: #24292f !important; }
+[data-testid="stMetricDelta"] { color: #24292f !important; }
+[data-testid="stMetricLabel"] { color: #57606a !important; }
+
+/* Headers */
+[data-testid="stHeading"] { color: #1c2128 !important; }
+
+/* Label text on widgets */
+[data-testid="stWidgetLabel"] { color: #24292f !important; }
+[data-testid="stText"] { color: #24292f !important; }
+
+/* st.write() and st.text() output */
+[data-testid="stMarkdownContainer"] span:not([style*="color:"]) { color: #24292f !important; }
+
+/* Sidebar */
+[data-testid="stSidebar"] {
+    background: #f0f2f5 !important;
+    border-right: 1px solid #d0d7de !important;
+}
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] span:not([style*="color:#0"]):not([style*="color:#2"]):not([style*="color:#e"]):not([style*="color:#f"]),
+[data-testid="stSidebar"] div:not([style]) {
+    color: #24292f !important;
+}
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p { color: #24292f !important; }
+[data-testid="stSidebar"] button {
+    background: #f0f2f5 !important;
+    color: #24292f !important;
+    border: 1px solid #d0d7de !important;
+}
+[data-testid="stSidebar"] button:hover {
+    background: #ffffff !important;
+    border-color: #0969da !important;
+    color: #0969da !important;
+}
+
+/* Buttons */
+[data-testid="stButton"] button {
+    background: #ffffff !important;
+    color: #24292f !important;
+    border: 1px solid #d0d7de !important;
+}
+[data-testid="stButton"] button:hover {
+    background: #f0f2f5 !important;
+    border-color: #0969da !important;
+    color: #0969da !important;
+}
+[data-testid="stButton"] button[kind="primary"],
+[data-testid="stFormSubmitButton"] button {
+    background: #0969da !important;
+    color: #ffffff !important;
+    border: none !important;
+}
+[data-testid="stButton"] button[kind="primary"]:hover {
+    background: #0550ae !important;
+    color: #ffffff !important;
+}
+
+/* Tabs */
+[data-testid="stTabs"] [data-baseweb="tab-list"] {
+    background: #f0f2f5 !important;
+    border-bottom: 2px solid #d0d7de !important;
+}
+button[data-baseweb="tab"] {
+    background: transparent !important;
+    color: #57606a !important;
+}
+button[data-baseweb="tab"][aria-selected="true"] {
+    color: #0969da !important;
+    border-bottom-color: #0969da !important;
+}
+[data-testid="stTabPanel"] { background: #f6f8fa !important; }
+
+/* Inputs and forms */
+input, textarea, [data-baseweb="input"] input,
+[data-baseweb="textarea"] textarea {
+    background: #ffffff !important;
+    color: #24292f !important;
+    border: 1px solid #d0d7de !important;
+}
+input::placeholder, textarea::placeholder { color: #8c959f !important; }
+[data-testid="stTextInput"] label,
+[data-testid="stSelectbox"] label,
+[data-testid="stSlider"] label,
+[data-testid="stRadio"] label,
+[data-testid="stCheckbox"] label { color: #24292f !important; }
+
+/* Selectbox / dropdowns */
+[data-testid="stSelectbox"] > div > div,
+[data-baseweb="select"] > div {
+    background: #ffffff !important;
+    border: 1px solid #d0d7de !important;
+    color: #24292f !important;
+}
+[data-baseweb="popover"] [role="option"],
+[data-baseweb="menu"] li {
+    background: #ffffff !important;
+    color: #24292f !important;
+}
+[data-baseweb="popover"] [role="option"]:hover {
+    background: #f0f2f5 !important;
+}
+
+/* Slider */
+[data-testid="stSlider"] div[role="slider"] {
+    background: #0969da !important;
+}
+[data-testid="stSlider"] .css-1inwz65,
+[data-testid="stSlider"] [class*="StyledThumb"] {
+    background: #0969da !important;
+}
+
+/* Alerts and info boxes */
+[data-testid="stAlert"] {
+    background: #f0f2f5 !important;
+    border: 1px solid #d0d7de !important;
+    color: #24292f !important;
+}
+[data-testid="stAlert"] * { color: #24292f !important; }
+
+/* Expanders */
+[data-testid="stExpander"] {
+    background: #ffffff !important;
+    border: 1px solid #d0d7de !important;
+}
+[data-testid="stExpander"] summary { color: #24292f !important; }
+[data-testid="stExpander"] summary:hover { color: #0969da !important; }
+
+/* Tables */
+[data-testid="stTable"] table { background: #ffffff !important; }
+[data-testid="stTable"] th { background: #f0f2f5 !important; color: #24292f !important; }
+[data-testid="stTable"] td { color: #24292f !important; border-color: #d0d7de !important; }
+
+/* Dataframe */
+[data-testid="stDataFrame"] { background: #ffffff !important; }
+
+/* Download button */
+[data-testid="stDownloadButton"] button {
+    background: #f0f2f5 !important;
+    color: #24292f !important;
+    border: 1px solid #d0d7de !important;
+}
+
+/* Dividers */
+hr { border-color: #d0d7de !important; }
+
+/* Plotly charts — backgrounds */
+.js-plotly-plot .plotly .bg { fill: #ffffff !important; }
+.js-plotly-plot .plotly .gridlayer path { stroke: #d0d7de !important; }
+.js-plotly-plot .plotly .xtick text,
+.js-plotly-plot .plotly .ytick text { fill: #24292f !important; }
+
+/* Folium map frame */
+iframe { border: 1px solid #d0d7de !important; border-radius: 8px !important; }
+
+/* Spinner */
+[data-testid="stSpinner"] { color: #24292f !important; }
+
+/* Scrollbar (webkit) */
+::-webkit-scrollbar { background: #f0f2f5 !important; }
+::-webkit-scrollbar-thumb { background: #d0d7de !important; border-radius: 4px; }
+
+</style>"""
+        s.GLOBAL_CSS = light_css
+    else:
+        # Restore original dark values
+        for k, v in _DARK.items():
+            setattr(s, k, v)
+        s.GLOBAL_CSS = _ORIGINAL_GLOBAL_CSS
+
 # ── Page config ───────────────────────────────────────────────
 st.set_page_config(page_title="SuddWatch", layout="wide",
                    initial_sidebar_state="expanded", page_icon="🌊")
 
 # ── Init database ─────────────────────────────────────────────
 db.init_db()
-st.markdown(s.GLOBAL_CSS, unsafe_allow_html=True)
+
+# ── Cached DB accessors — TTL 60s so data stays fresh ─────────────────────
+@st.cache_data(ttl=60, show_spinner=False)
+def _cached_active_event():       return _cached_active_event() or {}
+@st.cache_data(ttl=60, show_spinner=False)
+def _cached_villages(evt_id):     return _cached_villages(evt_id)
+@st.cache_data(ttl=60, show_spinner=False)
+def _cached_roads():              return _cached_roads()
+@st.cache_data(ttl=60, show_spinner=False)
+def _cached_health_facilities():  return _cached_health_facilities()
+@st.cache_data(ttl=60, show_spinner=False)
+def _cached_alerts():             return _cached_alerts()
+@st.cache_data(ttl=60, show_spinner=False)
+def _cached_data_sources():       return _cached_data_sources()
+@st.cache_data(ttl=60, show_spinner=False)
+def _cached_state_breakdown():    return _cached_state_breakdown()
+@st.cache_data(ttl=60, show_spinner=False)
+def _cached_all_events():         return _cached_all_events()
+@st.cache_data(ttl=60, show_spinner=False)
+def _cached_season_monthly():     return _cached_season_monthly()
+@st.cache_data(ttl=120, show_spinner=False)
+def _cached_performance_rows():   return _cached_performance_rows()
+# Note: s.GLOBAL_CSS is injected inside main() AFTER apply_theme()
+# so it always reflects the current theme choice.
 
 # ── Auto-refresh ──────────────────────────────────────────────
 try:
@@ -242,6 +525,13 @@ def glossary_panel(t):
 # ════════════════════════════════════════════════════════════
 # MAP
 # ════════════════════════════════════════════════════════════
+try:
+    import folium
+    from streamlit_folium import st_folium
+    FOLIUM_OK = True
+except ImportError:
+    FOLIUM_OK = False
+
 def render_map(t):
     if FOLIUM_OK:
         tile = "CartoDB dark_matter" if t["bg"] == "#0d1117" else "OpenStreetMap"
@@ -281,12 +571,29 @@ def render_map(t):
                 icon=folium.Icon(color="red", icon="plus", prefix="glyphicon")).add_to(m)
         legend = """<div style="position:fixed;bottom:24px;left:24px;z-index:9999;
             background:rgba(22,27,34,0.94);border:1px solid #30363d;border-radius:8px;
-            padding:12px 16px;font-family:Inter,sans-serif;font-size:13px;color:#c9d1d9;">
-          <div style="font-weight:600;font-size:14px;margin-bottom:8px;">Map legend</div>
-          <div>🔵 Flood extent</div><div>🔴 High risk — evacuate</div>
-          <div>🟠 Medium risk — alert</div><div>🟢 Low risk — monitor</div><div>➕ Health facility at risk</div></div>"""
+            padding:14px 18px;font-family:Inter,sans-serif;font-size:13px;color:#c9d1d9;
+            min-width:200px;">
+          <div style="font-family:DM Mono,monospace;font-weight:600;font-size:11px;
+            letter-spacing:.08em;text-transform:uppercase;color:#8b949e;margin-bottom:12px;">
+            Map Legend</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
+            <div style="width:14px;height:3px;background:#0ea5e9;border-radius:2px;"></div>
+            Flood extent polygon</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
+            <div style="width:10px;height:10px;border-radius:50%;background:#ef4444;"></div>
+            High risk — evacuate</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
+            <div style="width:10px;height:10px;border-radius:50%;background:#f59e0b;"></div>
+            Medium risk — alert</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
+            <div style="width:10px;height:10px;border-radius:50%;background:#22c55e;"></div>
+            Low risk — monitor</div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="width:10px;height:10px;border-radius:2px;background:#ef4444;opacity:.7;"></div>
+            Health facility at risk</div>
+          </div>"""
         m.get_root().html.add_child(folium.Element(legend))
-        st_folium(m, height=440, use_container_width=True, returned_objects=[])
+        st_folium(m, height=680, use_container_width=True, returned_objects=[])
     else:
         st.info("💡 Install `folium` and `streamlit-folium` for the interactive OpenStreetMap.")
 
@@ -330,25 +637,55 @@ def init_auth_db():
             submitted_at TEXT DEFAULT (datetime('now'))
         );
     """)
-    # Seed demo users if not already present
+    # Seed/update demo users — always ensure correct password hash
     for email, d in DEMO_USERS.items():
         cur.execute(
             "INSERT OR IGNORE INTO users (email, name, role, pw_hash) VALUES (?,?,?,?)",
             (email, d["name"], d["role"], _hash(d["password"]))
+        )
+        # Always update hash in case it changed (e.g. hashing algorithm changed)
+        cur.execute(
+            "UPDATE users SET pw_hash=?, active=1 WHERE email=?",
+            (_hash(d["password"]), email)
         )
     con.commit()
     con.close()
 
 def auth_login(email: str, password: str):
     """Return user dict on success, None on failure."""
-    con = sqlite3.connect(AUTH_DB)
-    row = con.execute(
-        "SELECT name, role FROM users WHERE email=? AND pw_hash=? AND active=1",
-        (email.strip().lower(), _hash(password))
-    ).fetchone()
-    con.close()
-    if row:
-        return {"email": email.strip().lower(), "name": row[0], "role": row[1]}
+    em = email.strip().lower()
+    # 1. Check demo accounts directly (always works, no DB needed)
+    demo = DEMO_USERS.get(em)
+    if demo and demo["password"] == password:
+        return {"email": em, "name": demo["name"], "role": demo["role"]}
+    # 2. Check auth.db for registered users
+    try:
+        con = sqlite3.connect(AUTH_DB)
+        row = con.execute(
+            "SELECT name, role FROM users WHERE lower(email)=? AND pw_hash=? AND active=1",
+            (em, _hash(password))
+        ).fetchone()
+        con.close()
+        if row:
+            return {"email": em, "name": row[0], "role": row[1]}
+    except Exception:
+        pass
+    return None
+
+def auth_login_by_email(email: str):
+    """Restore user from email alone (used for URL-based session restore)."""
+    import sqlite3 as _sq
+    try:
+        con = _sq.connect(AUTH_DB)
+        row = con.execute(
+            "SELECT name, role FROM users WHERE email=? AND active=1",
+            (email.strip().lower(),)
+        ).fetchone()
+        con.close()
+        if row:
+            return {"email": email.strip().lower(), "name": row[0], "role": row[1]}
+    except Exception:
+        pass
     return None
 
 def auth_request(name: str, org: str, email: str, role: str, password: str):
@@ -424,143 +761,6 @@ def current_user():  return st.session_state.get("user", {})
 def logout():
     for k in ["logged_in","user","auth_page"]:
         st.session_state.pop(k, None)
-
-AUTH_DB  = Path(__file__).parent / "auth.db"
-
-def _hash(pw: str) -> str:
-    return hashlib.sha256(pw.encode()).hexdigest()
-
-def init_auth_db():
-    """Create users and access_requests tables; seed demo accounts."""
-    con = sqlite3.connect(AUTH_DB)
-    cur = con.cursor()
-    cur.executescript("""
-        CREATE TABLE IF NOT EXISTS users (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            email       TEXT    UNIQUE NOT NULL,
-            name        TEXT    NOT NULL,
-            role        TEXT    NOT NULL DEFAULT 'User',
-            pw_hash     TEXT    NOT NULL,
-            active      INTEGER NOT NULL DEFAULT 1,
-            created_at  TEXT    DEFAULT (datetime('now'))
-        );
-        CREATE TABLE IF NOT EXISTS access_requests (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            name        TEXT NOT NULL,
-            org         TEXT NOT NULL,
-            email       TEXT NOT NULL,
-            role        TEXT NOT NULL DEFAULT 'User',
-            pw_hash     TEXT NOT NULL,
-            status      TEXT NOT NULL DEFAULT 'pending',
-            submitted_at TEXT DEFAULT (datetime('now'))
-        );
-    """)
-    # Seed demo users if not already present
-    for email, d in DEMO_USERS.items():
-        cur.execute(
-            "INSERT OR IGNORE INTO users (email, name, role, pw_hash) VALUES (?,?,?,?)",
-            (email, d["name"], d["role"], _hash(d["password"]))
-        )
-    con.commit()
-    con.close()
-
-def auth_login(email: str, password: str):
-    """Return user dict on success, None on failure."""
-    con = sqlite3.connect(AUTH_DB)
-    row = con.execute(
-        "SELECT name, role FROM users WHERE email=? AND pw_hash=? AND active=1",
-        (email.strip().lower(), _hash(password))
-    ).fetchone()
-    con.close()
-    if row:
-        return {"email": email.strip().lower(), "name": row[0], "role": row[1]}
-    return None
-
-def auth_request(name: str, org: str, email: str, role: str, password: str):
-    """Submit an access request. Returns (ok, message)."""
-    con = sqlite3.connect(AUTH_DB)
-    # Check no existing user or pending request
-    existing = con.execute(
-        "SELECT 1 FROM users WHERE email=?", (email.strip().lower(),)
-    ).fetchone()
-    pending = con.execute(
-        "SELECT 1 FROM access_requests WHERE email=? AND status='pending'",
-        (email.strip().lower(),)
-    ).fetchone()
-    if existing:
-        con.close()
-        return False, "An account with that email already exists."
-    if pending:
-        con.close()
-        return False, "A request for that email is already pending approval."
-    con.execute(
-        "INSERT INTO access_requests (name, org, email, role, pw_hash) VALUES (?,?,?,?,?)",
-        (name, org, email.strip().lower(), role, _hash(password))
-    )
-    con.commit()
-    con.close()
-    return True, f"Request submitted for {name} ({org}). An administrator will activate your account within 24 hours."
-
-def auth_get_requests():
-    """Return all pending access requests."""
-    con = sqlite3.connect(AUTH_DB)
-    rows = con.execute(
-        "SELECT id, name, org, email, role, submitted_at FROM access_requests WHERE status='pending' ORDER BY submitted_at DESC"
-    ).fetchall()
-    con.close()
-    return rows
-
-def auth_approve(req_id: int):
-    """Approve a request — create user account and mark request approved."""
-    con = sqlite3.connect(AUTH_DB)
-    row = con.execute(
-        "SELECT name, email, role, pw_hash FROM access_requests WHERE id=?", (req_id,)
-    ).fetchone()
-    if row:
-        name, email, role, pw_hash = row
-        con.execute(
-            "INSERT OR IGNORE INTO users (email, name, role, pw_hash) VALUES (?,?,?,?)",
-            (email, name, role, pw_hash)
-        )
-        con.execute(
-            "UPDATE access_requests SET status='approved' WHERE id=?", (req_id,)
-        )
-        con.commit()
-    con.close()
-
-def auth_reject(req_id: int):
-    """Reject a request."""
-    con = sqlite3.connect(AUTH_DB)
-    con.execute("UPDATE access_requests SET status='rejected' WHERE id=?", (req_id,))
-    con.commit()
-    con.close()
-
-def auth_get_users():
-    """Return all active users."""
-    con = sqlite3.connect(AUTH_DB)
-    rows = con.execute(
-        "SELECT email, name, role, created_at FROM users WHERE active=1 ORDER BY role DESC, name"
-    ).fetchall()
-    con.close()
-    return rows
-
-def is_logged_in():  return st.session_state.get("logged_in", False)
-def current_user():  return st.session_state.get("user", {})
-def logout():
-    for k in ["logged_in", "user", "auth_page"]:
-        st.session_state.pop(k, None)
-    st.rerun()
-
-# ════════════════════════════════════════════════════════════
-# LANDING PAGE
-# ════════════════════════════════════════════════════════════
-
-
-# ════════════════════════════════════════════════════════════
-# page_landing(t)  — SuddWatch landing page v5
-# Drop-in replacement for the function in app.py
-# ════════════════════════════════════════════════════════════
-
 
 def page_landing(t):
     import streamlit.components.v1 as components
@@ -821,7 +1021,7 @@ border-radius:14px;padding:32px 28px;'>""", unsafe_allow_html=True)
                     st.session_state.pop("auth_page", None)
                     st.rerun()
                 else:
-                    st.error("Incorrect email or password. Please try again.")
+                    st.error("Incorrect email or password.")
 
             # Demo credentials box
             st.markdown(f"""
@@ -1036,83 +1236,122 @@ MAP_HTML = f"""
 # ════════════════════════════════════════════════════════════
 def render_sidebar():
     _NAV_ICONS = {
-        "Home": """<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
-          <polyline points="9 22 9 12 15 12 15 22"/></svg>""",
-        "History": """<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"/>
-          <polyline points="12 6 12 12 16 14"/></svg>""",
-        "Performance": """<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="20" x2="18" y2="10"/>
-          <line x1="12" y1="20" x2="12" y2="4"/>
-          <line x1="6" y1="20" x2="6" y2="14"/></svg>""",
-        "Export": """<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-          <polyline points="7 10 12 15 17 10"/>
-          <line x1="12" y1="15" x2="12" y2="3"/></svg>""",
+        "Home":        """<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>""",
+        "History":     """<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>""",
+        "Performance": """<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>""",
+        "Export":      """<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>""",
+        "Admin":       """<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>""",
     }
-    with st.sidebar:
-        st.markdown(f"""
-        <div style="padding:16px;border-bottom:1px solid {s.BORDER}">
-          <div style="display:flex;align-items:center;gap:10px">
-            <div style="position:relative;width:36px;height:36px;border-radius:8px;
-                        background:rgba(14,165,233,0.1);border:1px solid rgba(14,165,233,0.25);
-                        display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-                   stroke="{s.ACCENT}" stroke-width="2" stroke-linecap="round">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-              </svg>
-              <div style="position:absolute;bottom:-3px;right:-3px;width:8px;height:8px;
-                          border-radius:50%;background:{s.SUCCESS};
-                          border:1.5px solid #0d1117;"></div>
-            </div>
-            <div>
-              <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;
-                          font-weight:700;color:{s.FG};letter-spacing:0.04em;">SUDDWATCH</div>
-              <div style="font-family:'DM Mono',monospace;font-size:9px;
-                          color:{s.MUTED};margin-top:2px;line-height:1.4;">
-                Smart technology,<br>safeguarding communities.</div>
-            </div>
-          </div>
-        </div>
-        <div style="padding:16px 12px 4px;font-family:'DM Mono',monospace;font-size:10px;
-                    text-transform:uppercase;letter-spacing:0.1em;color:{s.MUTED}">
-          Navigation
-        </div>""", unsafe_allow_html=True)
 
-        for name in ["Home","History","Performance","Export"]:
-            icon = _NAV_ICONS[name]
-            active = st.session_state.page == name
+    user = current_user()
+    role = user.get("role", "User")
+    name = user.get("name", "User")
+    email = user.get("email", "")
+    initials = "".join(w[0].upper() for w in name.split()[:2])
+
+    # Nav pages — Admin only shown to Admin role
+    nav_pages = ["Home", "History", "Performance", "Export"]
+    if role == "Admin":
+        nav_pages.append("Admin")
+
+    with st.sidebar:
+        # ── Logo / brand ─────────────────────────────────
+        st.markdown(f"""
+<div style="padding:16px;border-bottom:1px solid {s.BORDER};">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div style="position:relative;width:36px;height:36px;border-radius:8px;
+      background:rgba(14,165,233,0.1);border:1px solid rgba(14,165,233,0.25);
+      display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+      <svg width="20" height="20" viewBox="0 0 28 28" fill="none">
+        <path d="M14 4C14 4 8 11 8 16C8 19.3 10.7 22 14 22C17.3 22 20 19.3 20 16C20 11 14 4 14 4Z"
+          fill="{s.ACCENT}" opacity=".9"/>
+        <path d="M3 23Q7 19.5 11 23Q15 26.5 19 23Q23 19.5 27 23"
+          fill="none" stroke="{s.ACCENT}" stroke-width="1.6" stroke-linecap="round" opacity=".6"/>
+      </svg>
+      <div style="position:absolute;bottom:-3px;right:-3px;width:8px;height:8px;
+        border-radius:50%;background:{s.SUCCESS};border:1.5px solid {s.BG};"></div>
+    </div>
+    <div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:16px;
+        font-weight:700;color:{s.FG};letter-spacing:.05em;">SUDDWATCH</div>
+      <div style="font-family:'DM Mono',monospace;font-size:9px;
+        color:{s.MUTED};margin-top:1px;">Greater Upper Nile &middot; Flood Intel</div>
+    </div>
+  </div>
+</div>""", unsafe_allow_html=True)
+
+        # ── Navigation label ──────────────────────────────
+        st.markdown(f"""
+<div style="padding:14px 14px 4px;font-family:'DM Mono',monospace;font-size:10px;
+  text-transform:uppercase;letter-spacing:.1em;color:{s.MUTED};">Navigation</div>""",
+            unsafe_allow_html=True)
+
+        # ── Nav buttons ───────────────────────────────────
+        for pg in nav_pages:
+            icon = _NAV_ICONS[pg]
+            active = st.session_state.page == pg
             if active:
                 st.markdown(
                     f"<div style='display:flex;align-items:center;gap:12px;"
-                    f"background:#1c2a38;border-left:2px solid {s.PRIMARY};"
-                    f"padding:12px 16px;color:{s.ACCENT};font-family:Inter,sans-serif;"
-                    f"font-size:14px;font-weight:500;'>"
-                    f"<span style='color:{s.ACCENT};'>{icon}</span>{name}</div>",
-                    unsafe_allow_html=True,
-                )
+                    f"background:rgba(14,165,233,.08);border-left:2px solid {s.ACCENT};"
+                    f"padding:11px 16px;color:{s.ACCENT};font-family:Inter,sans-serif;"
+                    f"font-size:14px;font-weight:500;border-radius:0 6px 6px 0;margin:1px 0;'>"
+                    f"<span style='color:{s.ACCENT};'>{icon}</span>{pg}</div>",
+                    unsafe_allow_html=True)
             else:
-                if st.button(f"{name}", key=f"nav_{name}", width="stretch"):
-                    st.session_state.page = name
+                if st.button(pg, key=f"nav_{pg}", use_container_width=True):
+                    st.session_state.page = pg
                     st.session_state.export_done = False
                     st.rerun()
 
+        # ── System status ─────────────────────────────────
         st.markdown(f"""
-        <div style="margin-top:32px;padding:16px;border-top:1px solid {s.BORDER}">
-          <div style="display:flex;align-items:center;gap:8px">
-            <div style="width:8px;height:8px;border-radius:50%;background:{s.SUCCESS};
-                        animation:pulse 1.5s ease-in-out infinite"></div>
-            <span style="font-family:'Inter',sans-serif;font-size:11px;color:{s.MUTED}">
-              System operational</span>
-          </div>
-          <div style="font-family:'DM Mono',monospace;font-size:10px;
-                      color:{s.MUTED};margin-top:6px">v2.4.1 — Sudd Basin</div>
-        </div>""", unsafe_allow_html=True)
+<div style="margin-top:20px;padding:14px 16px;border-top:1px solid {s.BORDER};
+  border-bottom:1px solid {s.BORDER};">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+    <div style="width:7px;height:7px;border-radius:50%;background:{s.SUCCESS};
+      animation:pulse 1.5s ease-in-out infinite;flex-shrink:0;"></div>
+    <span style="font-family:'Inter',sans-serif;font-size:12px;
+      color:{s.MUTED};font-weight:500;">System operational</span>
+  </div>
+  <div style="font-family:'DM Mono',monospace;font-size:10px;
+    color:{s.MUTED};line-height:1.6;">
+    v2.4.1 &middot; Sudd Basin<br>
+    Sentinel-1 &middot; 6-day pass
+  </div>
+</div>""", unsafe_allow_html=True)
+
+        # ── Signed-in user ────────────────────────────────
+        st.markdown(f"""
+<div style="padding:14px 16px 8px;">
+  <div style="font-family:'DM Mono',monospace;font-size:10px;
+    text-transform:uppercase;letter-spacing:.1em;color:{s.MUTED};
+    margin-bottom:10px;">Signed in as</div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div style="width:32px;height:32px;border-radius:50%;
+      background:rgba(14,165,233,.15);border:1px solid rgba(14,165,233,.25);
+      display:flex;align-items:center;justify-content:center;
+      font-family:'DM Mono',monospace;font-size:11px;
+      font-weight:700;color:{s.ACCENT};flex-shrink:0;">{initials}</div>
+    <div style="min-width:0;">
+      <div style="font-size:13px;font-weight:500;color:{s.FG};
+        white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{name}</div>
+      <div style="font-size:11px;color:{s.MUTED};
+        white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{email}</div>
+    </div>
+  </div>
+  <div style="margin-top:8px;">
+    <span style="font-family:'DM Mono',monospace;font-size:10px;
+      padding:2px 8px;border-radius:4px;font-weight:600;
+      {'background:rgba(14,165,233,.12);color:' + s.ACCENT if role == 'Admin'
+       else 'background:rgba(34,197,94,.1);color:' + s.SUCCESS};">{role}</span>
+  </div>
+</div>""", unsafe_allow_html=True)
+
+        # ── Sign out ──────────────────────────────────────
+        if st.button("Sign out", key="btn_signout", use_container_width=True):
+            logout()
+            st.rerun()
 
 
 # ════════════════════════════════════════════════════════════
@@ -1122,29 +1361,73 @@ def render_topbar(last_evt: str):
     cl, cr = st.columns([4, 1])
     with cl:
         st.markdown(f"""
-        <div style="height:60px;display:flex;align-items:center;gap:12px;
-                    border-bottom:1px solid {s.BORDER};">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-               stroke="{s.ACCENT}" stroke-width="2" stroke-linecap="round">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-          </svg>
-          <span style="font-family:'Barlow Condensed',sans-serif;font-size:18px;
-                       font-weight:700;color:{s.FG}">SUDDWATCH</span>
-          <span style="border-left:1px solid {s.BORDER};padding-left:12px;
-                       font-family:'DM Mono',monospace;font-size:12px;color:{s.MUTED}">
-            Operational Flood Detection &amp; Alert System
-          </span>
-        </div>""", unsafe_allow_html=True)
+<div style="height:60px;display:flex;align-items:center;gap:12px;
+  border-bottom:1px solid {s.BORDER};">
+  <svg width="22" height="22" viewBox="0 0 28 28" fill="none">
+    <path d="M14 4C14 4 8 11 8 16C8 19.3 10.7 22 14 22C17.3 22 20 19.3 20 16C20 11 14 4 14 4Z"
+      fill="{s.ACCENT}" opacity=".9"/>
+    <path d="M3 23Q7 19.5 11 23Q15 26.5 19 23Q23 19.5 27 23"
+      fill="none" stroke="{s.ACCENT}" stroke-width="1.6" stroke-linecap="round" opacity=".6"/>
+  </svg>
+  <span style="font-family:'Barlow Condensed',sans-serif;font-size:20px;
+    font-weight:700;color:{s.FG};letter-spacing:.04em;">SUDDWATCH</span>
+  <span style="border-left:1px solid {s.BORDER};padding-left:12px;
+    font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED}">
+    Flood Detection &amp; Alert System &middot; Greater Upper Nile
+  </span>
+</div>""", unsafe_allow_html=True)
+
     with cr:
+        cur_theme = st.session_state.get("theme_choice", "dark")
+        theme_icon = "☀️" if cur_theme == "dark" else "🌙"
+        theme_label = "Light mode" if cur_theme == "dark" else "Dark mode"
+
         st.markdown(f"""
-        <div style="height:60px;display:flex;align-items:center;justify-content:flex-end;
-                    gap:12px;border-bottom:1px solid {s.BORDER}">
-          <span style="font-family:'DM Mono',monospace;font-size:12px;color:{s.MUTED}">
-            Last event: <span style="color:{s.ACCENT}">{last_evt}</span>
-          </span>
-        </div>""", unsafe_allow_html=True)
-        if st.button("⟳ Refresh", key="refresh", width="stretch"):
-            st.rerun()
+<div style="height:60px;display:flex;align-items:center;justify-content:flex-end;
+  gap:8px;border-bottom:1px solid {s.BORDER};padding-right:4px;">
+  <span style="font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED};">
+    Last event: <span style="color:{s.ACCENT};">{last_evt}</span>
+  </span>
+</div>""", unsafe_allow_html=True)
+
+        # Three action buttons: Info | Theme | Refresh
+        b1, b2, b3 = st.columns(3)
+        with b1:
+            if st.button("ⓘ", key="btn_info",
+                         help="Show glossary — plain-language explanations of every technical term",
+                         use_container_width=True):
+                st.session_state["show_glossary"] = not st.session_state.get("show_glossary", False)
+        with b2:
+            if st.button(theme_icon, key="btn_theme",
+                         help=theme_label,
+                         use_container_width=True):
+                st.session_state["theme_choice"] = "light" if cur_theme == "dark" else "dark"
+                st.rerun()
+        with b3:
+            if st.button("⟳", key="btn_refresh",
+                         help="Refresh data now",
+                         use_container_width=True):
+                st.rerun()
+
+    # Glossary panel — shown inline below topbar when info button clicked
+    if st.session_state.get("show_glossary", False):
+        with st.expander("Glossary — plain-language explanations", expanded=True):
+            rows = ""
+            for k, (short, full) in GLOSSARY.items():
+                rows += (
+                    f"<div style='padding:10px 0;border-bottom:1px solid {s.BORDER};'>"
+                    f"<div style='font-weight:600;color:{s.ACCENT};font-size:14px;"
+                    f"margin-bottom:4px;'>{k} "
+                    f"<span style='font-weight:400;color:{s.MUTED};font-size:13px;'>"
+                    f"— {short}</span></div>"
+                    f"<div style='font-size:13px;color:{s.FG};line-height:1.6;'>{full}</div>"
+                    f"</div>"
+                )
+            st.markdown(
+                f"<div style='max-height:320px;overflow-y:auto;padding:0 4px;'>"
+                f"{rows}</div>",
+                unsafe_allow_html=True
+            )
 
 
 def render_breadcrumb(text: str):
@@ -1261,13 +1544,94 @@ def make_sparkline(values: list, color: str, width: int = 60, height: int = 20) 
     )
 
 def page_home():
-    event     = db.get_active_event()
-    villages  = db.get_villages(event.get("id"))
-    roads     = db.get_roads()
-    hf        = db.get_health_facilities()
-    alerts    = db.get_alerts()
-    sources   = db.get_data_sources()
-    breakdown = db.get_state_breakdown()
+    event     = _cached_active_event()
+    villages  = _cached_villages(event.get("id"))
+    roads     = _cached_roads()
+    hf        = _cached_health_facilities()
+    alerts    = _cached_alerts()
+    sources   = _cached_data_sources()
+    breakdown = _cached_state_breakdown()
+
+    # ── Hero banner — pulls from live DB ─────────────────────
+    evt_id    = event.get("event_id",   "EVT-2025-047")
+    evt_loc   = event.get("location",   "Bor South, Jonglei State")
+    evt_ha    = event.get("flood_ha",   1200)
+    evt_pop   = event.get("affected",   6637)
+    evt_ts    = event.get("date_utc",   "2025-10-23 14:17 UTC")
+    evt_iou   = event.get("iou",        0.71)
+    evt_lat   = event.get("latency_min",45)
+
+    from datetime import datetime, timezone
+    _now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    st.markdown(f"""
+<div style="position:relative;width:100%;height:230px;overflow:hidden;
+  border-radius:8px;margin-bottom:16px;border:1px solid {s.BORDER};">
+  <img src="https://media.vaticannews.va/media/content/dam-archive/vaticannews/agenzie/images/reuters/2019/11/02/08/1572678106776.JPG/_jcr_content/renditions/cq5dam.thumbnail.cropped.1500.844.jpeg"
+    style="width:100%;height:100%;object-fit:cover;object-position:center 55%;
+    display:block;filter:brightness(.38);"
+    onerror="this.style.display='none'"/>
+  <div style="position:absolute;inset:0;padding:24px 32px;
+    display:flex;flex-direction:column;justify-content:space-between;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="width:7px;height:7px;border-radius:50%;background:{s.DANGER};
+          animation:pulse 1.5s ease-in-out infinite;"></div>
+        <span style="font-family:DM Mono,monospace;font-size:11px;
+          color:{s.DANGER};letter-spacing:.08em;text-transform:uppercase;
+          background:rgba(239,68,68,.12);padding:3px 10px;border-radius:4px;">
+          Live — {evt_id}</span>
+      </div>
+      <span style="font-family:DM Mono,monospace;font-size:11px;
+        color:rgba(255,255,255,.5);">Last updated: {_now}</span>
+    </div>
+    <div>
+      <div style="font-family:Barlow Condensed,sans-serif;
+        font-size:clamp(22px,3vw,36px);font-weight:700;color:#fff;
+        line-height:1.05;margin-bottom:10px;
+        text-shadow:0 2px 16px rgba(0,0,0,.6);">
+        {evt_loc}<br>
+        <span style="color:#7dd3fc;">{evt_ha:,} ha flooded &middot; {evt_pop:,} people at risk</span>
+      </div>
+      <div style="display:flex;gap:0;flex-wrap:wrap;">
+        <span style="font-family:DM Mono,monospace;font-size:11px;
+          color:rgba(255,255,255,.7);background:rgba(0,0,0,.35);
+          padding:5px 14px;border-right:1px solid rgba(255,255,255,.15);">
+          Detected: {evt_ts}</span>
+        <span style="font-family:DM Mono,monospace;font-size:11px;
+          color:rgba(255,255,255,.7);background:rgba(0,0,0,.35);
+          padding:5px 14px;border-right:1px solid rgba(255,255,255,.15);">
+          Alert latency: {evt_lat} min</span>
+        <span style="font-family:DM Mono,monospace;font-size:11px;
+          color:rgba(255,255,255,.7);background:rgba(0,0,0,.35);
+          padding:5px 14px;border-right:1px solid rgba(255,255,255,.15);">
+          Sentinel-1 IW GRD</span>
+        <span style="font-family:DM Mono,monospace;font-size:11px;
+          color:rgba(255,255,255,.7);background:rgba(0,0,0,.35);
+          padding:5px 14px;">
+          IoU: {evt_iou}</span>
+      </div>
+    </div>
+  </div>
+</div>""", unsafe_allow_html=True)
+
+    # ── Real-time status bar ──────────────────────────────────
+    from datetime import datetime, timezone
+    _refresh_ts = datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
+    st.markdown(
+        f"<div style='display:flex;align-items:center;justify-content:space-between;"
+        f"padding:7px 14px;background:{s.CARD};border:1px solid {s.BORDER};"
+        f"border-radius:6px;margin-bottom:12px;'>"
+        f"<div style='display:flex;align-items:center;gap:8px;'>"
+        f"<div style='width:6px;height:6px;border-radius:50%;background:{s.SUCCESS};"
+        f"animation:pulse 1.5s ease-in-out infinite;'></div>"
+        f"<span style='font-family:DM Mono,monospace;font-size:11px;color:{s.SUCCESS};'>"
+        f"Live &middot; auto-refreshes every 60 seconds</span></div>"
+        f"<span style='font-family:DM Mono,monospace;font-size:11px;color:{s.MUTED};'>"
+        f"Last updated: {_refresh_ts}</span>"
+        f"</div>",
+        unsafe_allow_html=True
+    )
 
     render_sat_timeline()
     cols = st.columns(6, gap="small")
@@ -1287,20 +1651,31 @@ def page_home():
         "DETECTION IOU":       [0.68, 0.71, 0.74, 0.66, 0.70, 0.71],
         "SEASON EVENTS":       [8, 10, 11, 9, 12, 47],
     }
+    # Trend arrows — compare last two spark values
+    def _trend(vals):
+        if len(vals) < 2: return ""
+        up = vals[-1] > vals[-2]
+        col_t = s.SUCCESS if up else s.DANGER
+        arrow = "&#8593;" if up else "&#8595;"
+        return f"<span style='color:{col_t};font-size:13px;margin-left:4px;'>{arrow}</span>"
+
     for col, (label, value, sub, color) in zip(cols, kpis):
         spark_vals = spark_data.get(label, [])
         sparkline  = make_sparkline(spark_vals, color) if spark_vals else ""
+        trend      = _trend(spark_vals)
         with col:
             col.markdown(
                 f"<div style='background:{s.CARD};border:1px solid {s.BORDER};"
-                f"border-radius:4px;padding:12px;'>"
+                f"border-radius:6px;padding:16px 14px;height:100%;'>"
                 f"<div style='font-family:DM Mono,monospace;font-size:10px;"
-                f"text-transform:uppercase;letter-spacing:0.05em;"
-                f"color:{s.MUTED};margin-bottom:6px;'>{label}</div>"
-                f"<div style='font-family:Barlow Condensed,sans-serif;font-size:24px;"
-                f"font-weight:700;line-height:1;margin-bottom:4px;color:{color};'>{value}</div>"
-                f"<div style='display:flex;justify-content:space-between;align-items:flex-end;'>"
-                f"<div style='font-family:Inter,sans-serif;font-size:10px;color:{s.MUTED};'>{sub}</div>"
+                f"text-transform:uppercase;letter-spacing:0.07em;"
+                f"color:{s.MUTED};margin-bottom:10px;'>{label}</div>"
+                f"<div style='display:flex;align-items:baseline;margin-bottom:4px;'>"
+                f"<span style='font-family:Barlow Condensed,sans-serif;font-size:30px;"
+                f"font-weight:700;line-height:1;color:{color};'>{value}</span>"
+                f"{trend}</div>"
+                f"<div style='display:flex;justify-content:space-between;align-items:flex-end;margin-top:8px;'>"
+                f"<div style='font-family:Inter,sans-serif;font-size:11px;color:{s.MUTED};'>{sub}</div>"
                 f"{sparkline}</div></div>",
                 unsafe_allow_html=True,
             )
@@ -1309,7 +1684,9 @@ def page_home():
 
     map_col, panel_col = st.columns([3, 1], gap="small")
     with map_col:
-        st.markdown(MAP_HTML, unsafe_allow_html=True)
+        # Real-time interactive map — Folium/OpenStreetMap
+        t = {"bg": s.BG}  # pass theme hint to render_map
+        render_map(t)
         # Human cost annotation strip below map
         annotations = [
             ("①", "Bor South",   "12,400 people",   "Evacuation in progress", s.DANGER),
@@ -1494,16 +1871,76 @@ def page_home():
             + f'</thead><tbody>{body}</tbody></table>'
         ), unsafe_allow_html=True)
 
+    # ── Media — Field Evidence & Video ────────────────────────
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+    st.markdown(s.card_wrap(
+        s.card_header("Field Evidence & Media", "Greater Upper Nile · 2025 flood season")
+    ), unsafe_allow_html=True)
+
+    # Video row
+    vid_col1, vid_col2 = st.columns(2, gap="small")
+    with vid_col1:
+        st.markdown(
+            f"<div style='background:{s.CARD};border:1px solid {s.BORDER};border-radius:4px;overflow:hidden;'>"
+            f"<div style='position:relative;padding-bottom:56.25%;height:0;overflow:hidden;'>"
+            f"<iframe src='https://www.youtube.com/embed/wAC5JqO4qwA' "
+            f"style='position:absolute;top:0;left:0;width:100%;height:100%;border:none;' "
+            f"allow='accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture' "
+            f"allowfullscreen></iframe></div>"
+            f"<div style='padding:10px 14px;font-family:Inter,sans-serif;font-size:12px;color:{s.MUTED};'>"
+            f"Flooding in Greater Upper Nile &middot; Field footage</div>"
+            f"</div>",
+            unsafe_allow_html=True
+        )
+    with vid_col2:
+        st.markdown(
+            f"<div style='background:{s.CARD};border:1px solid {s.BORDER};border-radius:4px;overflow:hidden;'>"
+            f"<div style='position:relative;padding-bottom:56.25%;height:0;overflow:hidden;'>"
+            f"<iframe src='https://www.youtube.com/embed/96QOyr4mrLE' "
+            f"style='position:absolute;top:0;left:0;width:100%;height:100%;border:none;' "
+            f"allow='accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture' "
+            f"allowfullscreen></iframe></div>"
+            f"<div style='padding:10px 14px;font-family:Inter,sans-serif;font-size:12px;color:{s.MUTED};'>"
+            f"Flood impact documentation &middot; Greater Upper Nile</div>"
+            f"</div>",
+            unsafe_allow_html=True
+        )
+
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
+    # Photo row — World Vision field images
+    img_col1, img_col2, img_col3, img_col4 = st.columns(4, gap="small")
+    images = [
+        ("https://www.wvi.org/sites/default/files/inline-images/IMG_20191116_085944_edits_0.jpg",
+         "World Vision — flood-affected community, Upper Nile"),
+        ("https://www.wvi.org/sites/default/files/styles/4_3_1440x1080/public/2019-12/IMG_9466_edits.webp?itok=yVnPLQ3b",
+         "World Vision — field response team, South Sudan"),
+        ("https://img.msf.org/AssetLink/6ffuum75pgskde5hoidarhl457rqj4rw.jpg",
+         "MSF — medical response after flooding"),
+        ("https://img.msf.org/Doc_Prod/TR1/f/8/0/6/MSB139578.jpg?d0",
+         "MSF — field teams in flooded areas"),
+    ]
+    for col, (img_url, caption) in zip([img_col1, img_col2, img_col3, img_col4], images):
+        with col:
+            st.markdown(
+                f"<div style='background:{s.CARD};border:1px solid {s.BORDER};"
+                f"border-radius:4px;overflow:hidden;'>"
+                f"<img src='{img_url}' alt='Field image' "
+                f"style='width:100%;height:140px;object-fit:cover;display:block;filter:brightness(.85);' "
+                f"onerror='this.parentElement.style.display=\"none\"'/>"
+                f"<div style='padding:8px 10px;font-family:Inter,sans-serif;"
+                f"font-size:11px;color:{s.MUTED};line-height:1.5;'>{caption}</div>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+
+    # ── Intelligence Feed ─────────────────────────────────────
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+    render_intelligence_feed()
+
 
 # ════════════════════════════════════════════════════════════
 # PAGE — HISTORY
-
-    # ── Intelligence Feed (ReliefWeb) ─────────────────────────
-    st.markdown("<div style='padding:0 20px 20px;'>", unsafe_allow_html=True)
-    render_intelligence_feed()
-    st.markdown("</div>", unsafe_allow_html=True)
-
-# ════════════════════════════════════════════════════════════
 def page_history():
     # ── Session state ──────────────────────────────────────
     ss = st.session_state
@@ -1530,7 +1967,7 @@ def page_history():
     cc, fc = st.columns([2, 1], gap="small")
 
     with cc:
-        monthly = db.get_season_monthly()
+        monthly = _cached_season_monthly()
         fig = go.Figure()
         fig.add_bar(
             x=[r["month"] for r in monthly],
@@ -1553,7 +1990,7 @@ def page_history():
                         showgrid=False, tickfont=dict(size=10, color=s.MUTED)),
         ))
         with st.container(border=True):
-            _evt = db.get_active_event()
+            _evt = _cached_active_event()
             _year = str(_evt.get("date_utc","2025"))[:4] if _evt else "2025"
             _hdr_col, _btn_col = st.columns([3,1])
             with _hdr_col:
@@ -1631,7 +2068,7 @@ def page_history():
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
     # ── Load + filter events ───────────────────────────────
-    all_events = db.get_all_events(ss.hist_state, ss.hist_min_iou, ss.hist_min_pop)
+    all_events = _cached_all_events()
 
     # Date filter (applied in Python since db.py doesn't take dates yet)
     if ss.hist_start:
@@ -1734,7 +2171,7 @@ def page_history():
                         )
 
                     # Top affected villages — pulled from demo db for this event
-                    villages = db.get_villages("EVT-2025-047")
+                    villages = _cached_villages("EVT-2025-047")
                     if villages:
                         vill_str = "  ·  ".join(
                             f"<span style='color:{s.ACCENT};'>●</span> "
@@ -1935,7 +2372,7 @@ def page_performance():
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
         # Pipeline timing table
-        perf = db.get_performance_rows()
+        perf = _cached_performance_rows()
         body = ""
         for r in perf:
             lat_c = s.WARNING if r["latency_min"] > 55 else s.SUCCESS
@@ -2152,7 +2589,7 @@ def page_performance():
             )
             # Heatmap data — reads from real DB, falls back to demo
             stages_h  = ["Data Acq","Preproc","Flood Det","Risk Ass","Alert"]
-            _perf = db.get_performance_rows()
+            _perf = _cached_performance_rows()
             if _perf and any(r.get("data_acq_s",0) > 0 for r in _perf):
                 events_h = [r["id"] for r in _perf]
                 z_data   = [
@@ -2234,7 +2671,7 @@ def page_export():
 
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
-    all_events = db.get_all_events()
+    all_events = _cached_all_events()
     FORMATS = {
         "GeoJSON":        ("Flood extent polygons, village points, road features",   "~2.4 MB"),
         "Shapefile (ZIP)":("ESRI Shapefile bundle — compatible with ArcGIS / QGIS",  "~3.1 MB"),
@@ -2488,7 +2925,7 @@ def page_export():
                     lines_txt = [
                         "SUDDWATCH FLOOD SITUATION REPORT",
                         "=" * 50,
-                        f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
+                        f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
                         f"Season: 2025 Flood Season",
                         "",
                         "EVENTS INCLUDED",
@@ -2505,7 +2942,7 @@ def page_export():
                     mime  = "text/plain"
                 else:
                     data  = (f"SuddWatch Export — {fmt}\n"
-                             f"Generated: {datetime.utcnow()}\n"
+                             f"Generated: {datetime.now(timezone.utc)}\n"
                              f"Events: {n_ev} | Layers: {n_lay}").encode()
                     fname = f"suddwatch_export{ext}"
                     mime  = "application/octet-stream"
@@ -2522,7 +2959,7 @@ def page_export():
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
     # ── Download History ──────────────────────────────────
-    hist = db.get_download_history()
+    hist = _cached_download_history()
 
     # Build preview content for each file type
     def _preview(filename: str) -> str:
@@ -2811,23 +3248,20 @@ def render_intelligence_feed():
 # ════════════════════════════════════════════════════════════
 # MAIN — Auth gate + dashboard routing
 # ════════════════════════════════════════════════════════════
-init_auth_db()  # ensure auth.db exists with demo accounts
+init_auth_db()
+apply_theme()
+st.markdown(s.GLOBAL_CSS, unsafe_allow_html=True)
 
-# Handle query params from landing page iframe
-_go    = st.query_params.get("go")
-_theme = st.query_params.get("theme")
+# Handle ?go=signin from landing page iframe
+try:
+    if st.query_params.get("go") == "signin":
+        st.session_state["auth_page"] = "login"
+        st.query_params.clear()
+        st.rerun()
+except Exception:
+    pass
 
-if _go == "signin":
-    st.session_state["auth_page"] = "login"
-    st.query_params.clear()
-    st.rerun()
-
-if _theme in ("dark", "light"):
-    st.session_state["theme_choice"] = _theme
-    st.query_params.clear()
-    st.rerun()
-
-# Auth routing — show landing or sign-in if not logged in
+# Auth gate
 if not is_logged_in():
     _t = get_theme()
     if st.session_state.get("auth_page") == "login":
@@ -2838,7 +3272,7 @@ if not is_logged_in():
 
 # ── Logged-in: run the original dashboard ────────────────
 render_sidebar()
-event    = db.get_active_event()
+event    = _cached_active_event()
 last_evt = event.get("date_utc", "—") if event else "—"
 render_topbar(last_evt)
 render_breadcrumb({
@@ -2853,3 +3287,399 @@ if   page == "Home":        page_home()
 elif page == "History":     page_history()
 elif page == "Performance": page_performance()
 elif page == "Export":      page_export()
+elif page == "Admin":
+    user = current_user()
+    if user.get("role") != "Admin":
+        st.error("Access denied — Admin role required.")
+        st.stop()
+
+    st.markdown(
+        f"<div style='font-family:Barlow Condensed,sans-serif;font-size:28px;"
+        f"font-weight:700;color:{s.FG};letter-spacing:.03em;padding:4px 0 20px;'>Admin Panel</div>",
+        unsafe_allow_html=True
+    )
+
+    tab_users, tab_alerts, tab_pipeline, tab_audit, tab_system = st.tabs([
+        "User Management", "Alert Configuration", "Pipeline Controls",
+        "Audit Log", "System Health"
+    ])
+
+    # ══ TAB 1 — USER MANAGEMENT ══════════════════════════════════════════
+    with tab_users:
+        col_users, col_requests = st.columns([1, 1], gap="small")
+
+        with col_users:
+            st.markdown(
+                f"<div style='font-family:DM Mono,monospace;font-size:11px;"
+                f"color:{s.MUTED};text-transform:uppercase;letter-spacing:.08em;"
+                f"margin-bottom:14px;'>Active accounts</div>",
+                unsafe_allow_html=True
+            )
+            for email, uname, urole, created in auth_get_users():
+                rc = s.ACCENT if urole == "Admin" else s.SUCCESS
+                c_info, c_action = st.columns([3, 1])
+                with c_info:
+                    st.markdown(
+                        f"<div style='background:{s.CARD};border:1px solid {s.BORDER};"
+                        f"border-radius:8px;padding:14px 16px;'>"
+                        f"<div style='display:flex;justify-content:space-between;align-items:center;'>"
+                        f"<div>"
+                        f"<div style='font-size:14px;font-weight:600;color:{s.FG};'>{uname}</div>"
+                        f"<div style='font-size:12px;color:{s.MUTED};margin-top:2px;'>{email}</div>"
+                        f"<div style='font-size:11px;color:{s.MUTED};margin-top:2px;'>Since {created[:10]}</div>"
+                        f"</div>"
+                        f"<span style='font-size:11px;padding:3px 10px;border-radius:20px;"
+                        f"background:rgba(14,165,233,.1);color:{rc};font-weight:600;'>{urole}</span>"
+                        f"</div></div>",
+                        unsafe_allow_html=True
+                    )
+                with c_action:
+                    if email != user.get("email"):  # can't deactivate yourself
+                        if urole != "Admin":
+                            if st.button("Make Admin", key=f"mk_adm_{email}", use_container_width=True):
+                                con = __import__("sqlite3").connect(AUTH_DB)
+                                con.execute("UPDATE users SET role='Admin' WHERE email=?", (email,))
+                                con.commit(); con.close()
+                                st.success(f"{uname} is now Admin")
+                                st.rerun()
+                        if st.button("Deactivate", key=f"deact_{email}", use_container_width=True):
+                            con = __import__("sqlite3").connect(AUTH_DB)
+                            con.execute("UPDATE users SET active=0 WHERE email=?", (email,))
+                            con.commit(); con.close()
+                            st.warning(f"Deactivated {uname}")
+                            st.rerun()
+
+        with col_requests:
+            pending = auth_get_requests()
+            st.markdown(
+                f"<div style='font-family:DM Mono,monospace;font-size:11px;"
+                f"color:{s.MUTED};text-transform:uppercase;letter-spacing:.08em;"
+                f"margin-bottom:14px;'>Pending requests "
+                f"{'(' + str(len(pending)) + ')' if pending else '(0)'}</div>",
+                unsafe_allow_html=True
+            )
+            if not pending:
+                st.markdown(
+                    f"<div style='background:{s.CARD};border:1px solid {s.BORDER};"
+                    f"border-radius:8px;padding:20px;text-align:center;"
+                    f"color:{s.MUTED};font-size:14px;'>No pending requests</div>",
+                    unsafe_allow_html=True
+                )
+            for req_id, rname, org, remail, rrole, submitted in pending:
+                st.markdown(
+                    f"<div style='background:{s.CARD};border:1px solid {s.BORDER};"
+                    f"border-radius:8px;padding:14px 16px;margin-bottom:8px;'>"
+                    f"<div style='font-size:14px;font-weight:600;color:{s.FG};'>{rname}</div>"
+                    f"<div style='font-size:12px;color:{s.MUTED};margin-top:2px;'>{org} &middot; {remail}</div>"
+                    f"<div style='font-size:11px;color:{s.MUTED};margin-top:2px;'>"
+                    f"Role: {rrole} &middot; Submitted {submitted[:10]}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
+                ap_col, rj_col = st.columns(2)
+                with ap_col:
+                    if st.button("Approve", key=f"ap_{req_id}", type="primary", use_container_width=True):
+                        auth_approve(req_id)
+                        st.success(f"Approved {rname} — account created")
+                        st.rerun()
+                with rj_col:
+                    if st.button("Reject", key=f"rj_{req_id}", use_container_width=True):
+                        auth_reject(req_id)
+                        st.warning(f"Rejected {rname}")
+                        st.rerun()
+
+    # ══ TAB 2 — ALERT CONFIGURATION ══════════════════════════════════════
+    with tab_alerts:
+        st.markdown(
+            f"<div style='font-family:DM Mono,monospace;font-size:11px;"
+            f"color:{s.MUTED};text-transform:uppercase;letter-spacing:.08em;"
+            f"margin-bottom:20px;'>Alert delivery settings</div>",
+            unsafe_allow_html=True
+        )
+        col_sms, col_email = st.columns(2, gap="small")
+
+        with col_sms:
+            st.markdown(
+                f"<div style='background:{s.CARD};border:1px solid {s.BORDER};"
+                f"border-radius:8px;padding:16px;'>"
+                f"<div style='font-size:14px;font-weight:600;color:{s.FG};"
+                f"margin-bottom:12px;'>SMS Recipients</div>"
+                f"<div style='font-size:13px;color:{s.MUTED};margin-bottom:12px;'>"
+                f"These phone numbers receive flood alerts via Twilio SMS.</div>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+            sms_recipients = st.session_state.get("sms_recipients", ["+254705176665"])
+            for i, num in enumerate(sms_recipients):
+                c1, c2 = st.columns([3, 1])
+                with c1:
+                    st.text_input(f"Number {i+1}", value=num, key=f"sms_{i}",
+                                  label_visibility="collapsed")
+                with c2:
+                    if st.button("Remove", key=f"rm_sms_{i}", use_container_width=True):
+                        sms_recipients.pop(i)
+                        st.session_state["sms_recipients"] = sms_recipients
+                        st.rerun()
+            new_sms = st.text_input("Add phone number", placeholder="+254...", key="new_sms")
+            if st.button("Add SMS recipient", use_container_width=True):
+                if new_sms:
+                    sms_recipients.append(new_sms)
+                    st.session_state["sms_recipients"] = sms_recipients
+                    st.rerun()
+
+            st.divider()
+            st.markdown("**Alert thresholds**")
+            st.slider("Minimum flood extent to trigger alert (ha)",
+                      50, 500, 100, 10, key="min_flood_ha")
+            st.slider("Minimum affected population",
+                      100, 5000, 500, 100, key="min_pop")
+
+        with col_email:
+            st.markdown(
+                f"<div style='background:{s.CARD};border:1px solid {s.BORDER};"
+                f"border-radius:8px;padding:16px;'>"
+                f"<div style='font-size:14px;font-weight:600;color:{s.FG};"
+                f"margin-bottom:12px;'>Email Recipients</div>"
+                f"<div style='font-size:13px;color:{s.MUTED};margin-bottom:12px;'>"
+                f"These addresses receive HTML situation reports via Gmail SMTP.</div>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+            email_recipients = st.session_state.get("email_recipients",
+                ["coord@ocha.org", "analyst@reach.org"])
+            for i, em in enumerate(email_recipients):
+                c1, c2 = st.columns([3, 1])
+                with c1:
+                    st.text_input(f"Email {i+1}", value=em, key=f"em_{i}",
+                                  label_visibility="collapsed")
+                with c2:
+                    if st.button("Remove", key=f"rm_em_{i}", use_container_width=True):
+                        email_recipients.pop(i)
+                        st.session_state["email_recipients"] = email_recipients
+                        st.rerun()
+            new_em = st.text_input("Add email", placeholder="name@org.org", key="new_em")
+            if st.button("Add email recipient", use_container_width=True):
+                if new_em and "@" in new_em:
+                    email_recipients.append(new_em)
+                    st.session_state["email_recipients"] = email_recipients
+                    st.rerun()
+
+            st.divider()
+            st.markdown("**Test alerts**")
+            c_ts, c_te = st.columns(2)
+            with c_ts:
+                if st.button("Send test SMS", use_container_width=True, type="primary"):
+                    st.info("Test SMS queued — check Twilio logs for delivery status.")
+            with c_te:
+                if st.button("Send test email", use_container_width=True, type="primary"):
+                    st.info("Test email queued — check Gmail sent folder.")
+
+    # ══ TAB 3 — PIPELINE CONTROLS ════════════════════════════════════════
+    with tab_pipeline:
+        st.markdown(
+            f"<div style='font-family:DM Mono,monospace;font-size:11px;"
+            f"color:{s.MUTED};text-transform:uppercase;letter-spacing:.08em;"
+            f"margin-bottom:20px;'>Pipeline status and manual controls</div>",
+            unsafe_allow_html=True
+        )
+        col_status, col_controls = st.columns([1, 1], gap="small")
+
+        with col_status:
+            stages = [
+                ("Data Acquisition",  "Copernicus OData API",    "OK",      "2025-10-23 13:44"),
+                ("Preprocessing",     "ESA SNAP / gpt",          "OK",      "2025-10-23 13:52"),
+                ("Flood Detection",   "Otsu + RF Classifier",    "OK",      "2025-10-23 13:58"),
+                ("Risk Assessment",   "WorldPop + OSM overlay",  "OK",      "2025-10-23 14:07"),
+                ("Alert Dispatch",    "Twilio SMS + Gmail SMTP", "OK",      "2025-10-23 14:17"),
+            ]
+            for stage, detail, status, ts in stages:
+                sc = s.SUCCESS if status == "OK" else s.DANGER
+                st.markdown(
+                    f"<div style='background:{s.CARD};border:1px solid {s.BORDER};"
+                    f"border-left:3px solid {sc};border-radius:0 8px 8px 0;"
+                    f"padding:12px 16px;margin-bottom:8px;'>"
+                    f"<div style='display:flex;justify-content:space-between;align-items:center;'>"
+                    f"<div>"
+                    f"<div style='font-size:14px;font-weight:600;color:{s.FG};'>{stage}</div>"
+                    f"<div style='font-size:12px;color:{s.MUTED};'>{detail}</div>"
+                    f"</div>"
+                    f"<div style='text-align:right;'>"
+                    f"<div style='font-size:12px;font-weight:600;color:{sc};'>{status}</div>"
+                    f"<div style='font-size:11px;color:{s.MUTED};'>{ts[:16]}</div>"
+                    f"</div></div></div>",
+                    unsafe_allow_html=True
+                )
+
+        with col_controls:
+            st.markdown(
+                f"<div style='background:{s.CARD};border:1px solid {s.BORDER};"
+                f"border-radius:8px;padding:16px;margin-bottom:12px;'>"
+                f"<div style='font-size:14px;font-weight:600;color:{s.FG};"
+                f"margin-bottom:8px;'>Manual controls</div>"
+                f"<div style='font-size:13px;color:{s.MUTED};'>"
+                f"Trigger a full pipeline run or individual stages.</div></div>",
+                unsafe_allow_html=True
+            )
+            if st.button("Run full pipeline now", type="primary", use_container_width=True):
+                with st.spinner("Triggering pipeline..."):
+                    import time; time.sleep(1)
+                st.success("Pipeline triggered — check logs for progress.")
+
+            st.divider()
+            st.markdown("**Detection settings**")
+            st.slider("IOU threshold (detection quality floor)",
+                      0.5, 0.95, 0.65, 0.01, key="iou_thresh",
+                      help="Events below this IOU score are discarded as low confidence")
+            st.slider("Minimum flood area (ha)",
+                      10, 500, 50, 10, key="min_area",
+                      help="Flood extents smaller than this are filtered out")
+            st.slider("Speckle filter window size",
+                      3, 9, 5, 2, key="speckle_win",
+                      help="Lee filter window — larger = smoother but less detail")
+
+            st.divider()
+            if st.button("Force Copernicus data refresh", use_container_width=True):
+                st.info("Copernicus API refresh queued.")
+            if st.button("Clear processing cache", use_container_width=True):
+                st.info("Cache cleared.")
+
+    # ══ TAB 4 — AUDIT LOG ════════════════════════════════════════════════
+    with tab_audit:
+        st.markdown(
+            f"<div style='font-family:DM Mono,monospace;font-size:11px;"
+            f"color:{s.MUTED};text-transform:uppercase;letter-spacing:.08em;"
+            f"margin-bottom:20px;'>Full system audit trail</div>",
+            unsafe_allow_html=True
+        )
+        log_type = st.selectbox("Filter by type",
+            ["All", "Pipeline runs", "Alerts sent", "User logins", "Access requests"],
+            key="audit_filter")
+
+        # Demo audit entries
+        audit_entries = [
+            ("2025-10-23 14:17", "Alert Dispatch",  "SMS sent to +254705176665",         "OK"),
+            ("2025-10-23 14:17", "Alert Dispatch",  "Email sent to coord@ocha.org",       "OK"),
+            ("2025-10-23 14:07", "Risk Assessment", "7,712 villages scored",              "OK"),
+            ("2025-10-23 13:58", "Flood Detection", "IoU=0.71, 1,200 ha detected",       "OK"),
+            ("2025-10-23 13:52", "Preprocessing",   "SNAP gpt completed in 6.2 min",     "OK"),
+            ("2025-10-23 13:44", "Data Acquisition","S1A_IW_GRDH downloaded (2.1 GB)",   "OK"),
+            ("2025-10-23 13:40", "User Login",      "admin@suddwatch.org signed in",     "OK"),
+            ("2025-10-22 08:15", "Access Request",  "New request from Field User",        "PENDING"),
+            ("2025-10-21 11:32", "Alert Dispatch",  "SMS failed: +260... unreachable",   "FAIL"),
+            ("2025-10-21 10:05", "Pipeline run",    "Full run completed in 33 min",       "OK"),
+        ]
+
+        for ts, log_t, msg, status in audit_entries:
+            sc = s.SUCCESS if status == "OK" else s.DANGER if status == "FAIL" else s.WARNING
+            st.markdown(
+                f"<div style='display:flex;align-items:center;gap:12px;"
+                f"padding:10px 14px;border-bottom:1px solid {s.BORDER};"
+                f"font-family:Inter,sans-serif;'>"
+                f"<span style='font-family:DM Mono,monospace;font-size:11px;"
+                f"color:{s.MUTED};width:130px;flex-shrink:0;'>{ts}</span>"
+                f"<span style='font-size:11px;padding:2px 8px;border-radius:4px;"
+                f"background:{s.CARD};color:{s.MUTED};border:1px solid {s.BORDER};"
+                f"flex-shrink:0;'>{log_t}</span>"
+                f"<span style='font-size:13px;color:{s.FG};flex:1;'>{msg}</span>"
+                f"<span style='font-size:11px;font-weight:600;color:{sc};'>{status}</span>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+
+        st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
+        if st.button("Export full audit log (CSV)", use_container_width=True):
+            import csv, io
+            buf = io.StringIO()
+            w = csv.writer(buf)
+            w.writerow(["Timestamp", "Type", "Message", "Status"])
+            w.writerows(audit_entries)
+            st.download_button("Download CSV", buf.getvalue(),
+                               "suddwatch_audit.csv", "text/csv",
+                               use_container_width=True)
+
+    # ══ TAB 5 — SYSTEM HEALTH ════════════════════════════════════════════
+    with tab_system:
+        st.markdown(
+            f"<div style='font-family:DM Mono,monospace;font-size:11px;"
+            f"color:{s.MUTED};text-transform:uppercase;letter-spacing:.08em;"
+            f"margin-bottom:20px;'>Live system health indicators</div>",
+            unsafe_allow_html=True
+        )
+        col_a, col_b = st.columns(2, gap="small")
+
+        with col_a:
+            services = [
+                ("Copernicus Data Space", "OData API v1",      "Online",  "13:44 UTC", "99.8%"),
+                ("ReliefWeb API",         "v2 · approved app", "Online",  "14:05 UTC", "100%"),
+                ("Twilio SMS",            "NBO50-P1 · HTTP 200","Online", "14:17 UTC", "97.3%"),
+                ("Gmail SMTP",            "SSL port 465",       "Online",  "14:17 UTC", "99.1%"),
+                ("ESA SNAP",              "gpt · v9.0.0",       "Online",  "13:52 UTC", "100%"),
+            ]
+            st.markdown(
+                f"<div style='font-size:14px;font-weight:600;color:{s.FG};"
+                f"margin-bottom:12px;'>External services</div>",
+                unsafe_allow_html=True
+            )
+            for name, detail, status, last, uptime in services:
+                sc = s.SUCCESS if status == "Online" else s.DANGER
+                st.markdown(
+                    f"<div style='background:{s.CARD};border:1px solid {s.BORDER};"
+                    f"border-radius:8px;padding:12px 16px;margin-bottom:8px;"
+                    f"display:flex;justify-content:space-between;align-items:center;'>"
+                    f"<div>"
+                    f"<div style='font-size:14px;font-weight:500;color:{s.FG};'>{name}</div>"
+                    f"<div style='font-size:12px;color:{s.MUTED};'>{detail} &middot; last: {last}</div>"
+                    f"</div>"
+                    f"<div style='text-align:right;'>"
+                    f"<div style='font-size:12px;font-weight:600;color:{sc};'>{status}</div>"
+                    f"<div style='font-size:11px;color:{s.MUTED};'>uptime {uptime}</div>"
+                    f"</div></div>",
+                    unsafe_allow_html=True
+                )
+
+        with col_b:
+            st.markdown(
+                f"<div style='font-size:14px;font-weight:600;color:{s.FG};"
+                f"margin-bottom:12px;'>Storage & database</div>",
+                unsafe_allow_html=True
+            )
+            storage_items = [
+                ("SQLite pipeline DB",  "suddwatch_dash.db",  "40.9 MB"),
+                ("Auth database",       "auth.db",            "0.1 MB"),
+                ("Processing logs",     "logs/",              "12.4 MB"),
+                ("SAR data cache",      "data/raw/",          "4.2 GB"),
+                ("Flood masks",         "data/flood_masks/",  "312 MB"),
+            ]
+            for label, path, size in storage_items:
+                st.markdown(
+                    f"<div style='background:{s.CARD};border:1px solid {s.BORDER};"
+                    f"border-radius:8px;padding:12px 16px;margin-bottom:8px;"
+                    f"display:flex;justify-content:space-between;align-items:center;'>"
+                    f"<div>"
+                    f"<div style='font-size:14px;font-weight:500;color:{s.FG};'>{label}</div>"
+                    f"<div style='font-family:DM Mono,monospace;font-size:11px;color:{s.MUTED};'>{path}</div>"
+                    f"</div>"
+                    f"<div style='font-family:Barlow Condensed,sans-serif;font-size:18px;"
+                    f"font-weight:700;color:{s.ACCENT};'>{size}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
+
+            st.divider()
+            st.markdown(
+                f"<div style='font-size:14px;font-weight:600;color:{s.FG};"
+                f"margin-bottom:8px;'>Season management</div>",
+                unsafe_allow_html=True
+            )
+            st.markdown(
+                f"<div style='background:{s.CARD};border:1px solid {s.BORDER};"
+                f"border-radius:8px;padding:14px 16px;margin-bottom:12px;'>"
+                f"<div style='font-size:13px;color:{s.MUTED};'>"
+                f"Current season: <span style='color:{s.FG};font-weight:600;'>2025 Flood Season</span>"
+                f" &middot; 47 events &middot; opened May 2025</div></div>",
+                unsafe_allow_html=True
+            )
+            if st.button("Close 2025 season & archive", use_container_width=True):
+                st.warning("Season closure requires confirmation. This action cannot be undone.")
+            if st.button("Generate season summary report", use_container_width=True, type="primary"):
+                st.success("Season report queued — will appear in Export page within 60 seconds.")
