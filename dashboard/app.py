@@ -277,6 +277,53 @@ iframe { border: 1px solid #d0d7de !important; border-radius: 8px !important; }
 st.set_page_config(page_title="SuddWatch", layout="wide",
                    initial_sidebar_state="expanded", page_icon="🌊")
 
+# Kill Streamlit fade/transition on every rerun
+st.markdown("""<style>
+*,*::before,*::after{
+    -webkit-transition:none!important;
+    transition:none!important;
+    -webkit-animation:none!important;
+    animation:none!important;}
+[data-testid="stStatusWidget"],
+div[class*="StatusWidget"]{display:none!important;}
+</style>
+<script>
+// Kill Streamlit's JS-driven fade overlay
+(function killFade(){
+    var style = document.createElement('style');
+    style.textContent = '* { transition: none !important; animation: none !important; }';
+    document.head.appendChild(style);
+
+    // Override requestAnimationFrame to prevent fade animations
+    var _raf = window.requestAnimationFrame;
+    window.requestAnimationFrame = function(cb) {
+        return _raf(function(t) {
+            // Remove any opacity < 1 Streamlit sets during rerun
+            var app = document.querySelector('[data-testid="stApp"]');
+            if (app) app.style.opacity = '1';
+            cb(t);
+        });
+    };
+
+    // Watch for Streamlit's overlay and remove it instantly
+    var observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(m) {
+            m.addedNodes.forEach(function(node) {
+                if (node.nodeType === 1) {
+                    // Kill any element Streamlit uses for the fade
+                    var app = document.querySelector('[data-testid="stApp"]');
+                    if (app) {
+                        app.style.opacity = '1';
+                        app.style.transition = 'none';
+                    }
+                }
+            });
+        });
+    });
+    observer.observe(document.body, {childList: true, subtree: true});
+})();
+</script>""", unsafe_allow_html=True)
+
 # ── Init database ─────────────────────────────────────────────
 db.init_db()
 
@@ -765,82 +812,106 @@ def logout():
         st.session_state.pop(k, None)
 
 def page_landing(t):
+    """Show landing.html as a proper iframe — no sandbox, buttons work."""
     import streamlit.components.v1 as components
     from pathlib import Path
-    html_path = Path(__file__).parent / "landing.html"
 
-    # Kill ALL Streamlit chrome and padding completely
+    # Preload sign-in background so transition is instant
     st.markdown(f"""<style>
+/* Preload: if transitioning to sign-in, background is already correct */
+[data-testid="stApp"]{{background:{t["bg"]}!important;}}
+</style>""", unsafe_allow_html=True)
+
+    # Kill every Streamlit padding/margin that causes dark strips
+    st.markdown("""<style>
 #MainMenu,footer,header,[data-testid="stToolbar"],
 [data-testid="stDecoration"],[data-testid="stStatusWidget"],
 [data-testid="stBottom"],[data-testid="stBottomBlockContainer"],
-[data-testid="stSidebar"]{{display:none!important;}}
-html,body,[data-testid="stApp"],
-[data-testid="stAppViewContainer"]{{
-    padding:0!important;margin:0!important;overflow:hidden!important;
-    background:{t["bg"]}!important;}}
+[data-testid="stSidebar"]{display:none!important;}
+html,body,[data-testid="stApp"],[data-testid="stAppViewContainer"]{
+    padding:0!important;margin:0!important;overflow:hidden!important;}
 [data-testid="stMainBlockContainer"],.block-container,
 section[data-testid="stMain"],
-[data-testid="stVerticalBlock"]{{
-    padding:0!important;margin:0!important;
-    gap:0!important;max-width:100%!important;}}
-/* Sign In button — styled to match landing nav */
-div[data-testid="stButton"] button{{
-    position:fixed!important;
-    top:16px!important;
-    right:24px!important;
-    z-index:2147483647!important;
-    background:{t["accent"]}!important;
-    color:#fff!important;
-    border:none!important;
-    border-radius:8px!important;
-    padding:9px 22px!important;
-    font-size:14px!important;
-    font-weight:600!important;
-    letter-spacing:.01em!important;
-    box-shadow:0 2px 8px rgba(0,0,0,.25)!important;
-    cursor:pointer!important;
-    width:auto!important;
-    min-width:0!important;
-}}
-div[data-testid="stButton"] button:hover{{
-    background:{t["accent"]}cc!important;
-}}
+[data-testid="stVerticalBlock"],
+[data-testid="element-container"]{
+    padding:0!important;margin:0!important;max-width:100%!important;
+    gap:0!important;}
+iframe{display:block!important;margin:0!important;padding:0!important;
+    border:none!important;width:100vw!important;height:100vh!important;
+    position:fixed!important;top:0!important;left:0!important;
+    z-index:1000!important;
+    opacity:1;transition:opacity 0.15s ease!important;}
 </style>""", unsafe_allow_html=True)
 
-    # The ONLY working sign-in mechanism in Safari
-    if st.button("Sign In", key="sw_land_signin"):
-        st.session_state["sw_page"] = "signin"
-        st.rerun()
-
+    # Read the HTML and replace tokens + fix buttons
+    html_path = Path(__file__).parent / "landing.html"
     if not html_path.exists():
         st.error("landing.html not found.")
         return
 
-    html = html_path.read_text()
+    @st.cache_data(show_spinner=False)
+    def _load_landing_html(path_str, theme):
+        html = open(path_str).read()
+        return html
+    html = _load_landing_html(str(html_path), st.session_state.get("sw_theme","dark"))
 
-    # Token replacement only
-    for tok, col in [
-        ('__CA2__', t['card2']), ('__AC__', t['accent']),
-        ('__SU__', t['success']), ('__WA__', t['warning']),
-        ('__DA__', t['danger']), ('__BG__', t['bg']),
-        ('__CA__', t['card']),   ('__BO__', t['border']),
-        ('__B2__', t['border2']),('__TH__', t['text_h']),
-        ('__TM__', t['text_m']), ('__TX__', t['text']),
-    ]:
+    # Pick theme based on sw_theme session state
+    _is_light = st.session_state.get("sw_theme", "dark") == "light"
+    if _is_light:
+        _tok_map = [
+            ('__CA2__','#f0f2f5'),('__AC__','#0969da'),('__SU__','#1a7f37'),
+            ('__WA__','#9a6700'), ('__DA__','#cf222e'),('__BG__','#f6f8fa'),
+            ('__CA__','#ffffff'), ('__BO__','#d0d7de'),('__B2__','#c8d0d9'),
+            ('__TH__','#1c2128'), ('__TM__','#57606a'),('__TX__','#24292f'),
+        ]
+    else:
+        _tok_map = [
+            ('__CA2__', t['card2']), ('__AC__', t['accent']),
+            ('__SU__', t['success']), ('__WA__', t['warning']),
+            ('__DA__', t['danger']), ('__BG__', t['bg']),
+            ('__CA__', t['card']),   ('__BO__', t['border']),
+            ('__B2__', t['border2']),('__TH__', t['text_h']),
+            ('__TM__', t['text_m']), ('__TX__', t['text']),
+        ]
+    for tok, col in _tok_map:
         html = html.replace(tok, col)
 
-    # Disable landing page signin buttons silently
-    html = html.replace(
-        "window.parent.postMessage({cmd:'signin'}, '*');",
-        "/* signin handled by Streamlit button */"
-    )
+    # Fix signin buttons — inject JS that communicates via URL hash
+    # which is readable from the parent without sandbox restrictions
+    signin_script = """
+<script>
+// Run after all other scripts so we override the page's own __suddTheme
+window.addEventListener('load', function() {
+  // Override postMessage for signin buttons
+  var _origPM = window.parent.postMessage.bind(window.parent);
+  window.parent.postMessage = function(msg, target) {
+    if (msg && msg.cmd === 'signin') {
+      try {
+        window.top.location.href = window.top.location.href.split('?')[0] + '?sw_go=signin';
+      } catch(e) {
+        window.location.href = '/?sw_go=signin';
+      }
+    } else {
+      _origPM(msg, target);
+    }
+  };
+  // Override theme toggle AFTER page's own definition
+  window.__suddTheme = function() {
+    var isLight = document.documentElement.classList.contains('light-mode');
+    // Toggle the class locally for visual feedback
+    document.documentElement.classList.toggle('light-mode');
+    // Then navigate to persist the choice
+    var next = isLight ? 'dark' : 'light';
+    setTimeout(function() {
+      try {
+        window.top.location.href = window.top.location.href.split('?')[0] + '?sw_go=theme_' + next;
+      } catch(e) {}
+    }, 200);
+  };
+});
+</script>"""
 
-    # Remove the landing page nav signin buttons via CSS
-    # so the fixed Streamlit button is the only one
-    html = html.replace('</head>',
-        '<style>nav .btn-primary,nav .btn-outline{display:none!important;}</style>'
-        '</head>')
+    html = html.replace('</head>', signin_script + '</head>')
 
     components.html(html, height=900, scrolling=True)
 
@@ -3213,13 +3284,11 @@ if not st.session_state.get("sw_auth"):
 #MainMenu,footer,header,[data-testid="stToolbar"],
 [data-testid="stDecoration"],[data-testid="stStatusWidget"],
 [data-testid="stBottom"]{{display:none!important;}}
-html,body,[data-testid="stApp"],[data-testid="stAppViewContainer"]{{
-    background:{s.BG}!important;}}
+html,body,[data-testid="stApp"],[data-testid="stAppViewContainer"],
 [data-testid="stMainBlockContainer"],.block-container{{
     background:{s.BG}!important;}}
-/* Suppress Streamlit's rerun overlay flash */
-[data-testid="stStatusWidget"]{{display:none!important;}}
-.stApp > div:first-child{{transition:none!important;}}
+iframe{{display:none!important;}}
+*{{transition:none!important;}}
 </style>""", unsafe_allow_html=True)
 
         _, mid, _ = st.columns([1, 1.2, 1])
@@ -3310,6 +3379,10 @@ html,body,[data-testid="stApp"],[data-testid="stAppViewContainer"]{{
             _qp = st.query_params.get("sw_go", "")
             if _qp == "signin":
                 st.session_state["sw_page"] = "signin"
+                st.query_params.clear()
+                st.rerun()
+            elif _qp in ("theme_light", "theme_dark"):
+                st.session_state["sw_theme"] = "light" if _qp == "theme_light" else "dark"
                 st.query_params.clear()
                 st.rerun()
         except Exception:
