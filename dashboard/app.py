@@ -12,6 +12,7 @@ import plotly.graph_objects as go
 sys.path.insert(0, str(Path(__file__).parent))
 import db
 import styles as s
+st.sidebar.write("checkpoint 1: imports OK")
 
 # ── Dynamic theme patcher ─────────────────────────────────────────────────
 # Patches the static styles module constants based on user theme preference.
@@ -280,27 +281,30 @@ st.set_page_config(page_title="SuddWatch", layout="wide",
 # ── Init database ─────────────────────────────────────────────
 db.init_db()
 
+st.sidebar.write("checkpoint 2: constants OK")
 # ── Cached DB accessors — TTL 60s so data stays fresh ─────────────────────
 @st.cache_data(ttl=60, show_spinner=False)
-def _cached_active_event():       return _cached_active_event() or {}
+def _cached_active_event():       return db.get_active_event() or {}
 @st.cache_data(ttl=60, show_spinner=False)
-def _cached_villages(evt_id):     return _cached_villages(evt_id)
+def _cached_villages(evt_id):     return db.get_villages(evt_id)
 @st.cache_data(ttl=60, show_spinner=False)
-def _cached_roads():              return _cached_roads()
+def _cached_roads():              return db.get_roads()
 @st.cache_data(ttl=60, show_spinner=False)
-def _cached_health_facilities():  return _cached_health_facilities()
+def _cached_health_facilities():  return db.get_health_facilities()
 @st.cache_data(ttl=60, show_spinner=False)
-def _cached_alerts():             return _cached_alerts()
+def _cached_alerts():             return db.get_alerts()
 @st.cache_data(ttl=60, show_spinner=False)
-def _cached_data_sources():       return _cached_data_sources()
+def _cached_data_sources():       return db.get_data_sources()
 @st.cache_data(ttl=60, show_spinner=False)
-def _cached_state_breakdown():    return _cached_state_breakdown()
+def _cached_state_breakdown():    return db.get_state_breakdown()
 @st.cache_data(ttl=60, show_spinner=False)
-def _cached_all_events():         return _cached_all_events()
+def _cached_all_events():         return db.get_all_events()
 @st.cache_data(ttl=60, show_spinner=False)
-def _cached_season_monthly():     return _cached_season_monthly()
+def _cached_season_monthly():     return db.get_season_monthly()
 @st.cache_data(ttl=120, show_spinner=False)
-def _cached_performance_rows():   return _cached_performance_rows()
+def _cached_performance_rows():   return db.get_performance_rows()
+@st.cache_data(ttl=60, show_spinner=False)
+def _cached_download_history():   return db.get_download_history()
 # Note: s.GLOBAL_CSS is injected inside main() AFTER apply_theme()
 # so it always reflects the current theme choice.
 
@@ -765,143 +769,72 @@ def logout():
 def page_landing(t):
     import streamlit.components.v1 as components
     from pathlib import Path
+    html_path = Path(__file__).parent / "landing.html"
 
-    # Kill every Streamlit wrapper element
+    # Hide ALL Streamlit chrome - full screen landing
     st.markdown("""<style>
-* {box-sizing: border-box;}
-html, body {margin:0;padding:0;overflow:hidden;}
-[data-testid="stApp"],
-[data-testid="stAppViewContainer"],
-[data-testid="stAppViewBlockContainer"],
-[data-testid="stMainBlockContainer"],
-[data-testid="stMain"],
-[data-testid="stVerticalBlock"],
-[data-testid="stVerticalBlockBorderWrapper"],
-.main, .block-container, section {
-    padding: 0 !important;
-    margin: 0 !important;
-    max-width: 100% !important;
-    width: 100% !important;
-}
-#MainMenu, header, footer,
-[data-testid="stToolbar"],
-[data-testid="stDecoration"],
-[data-testid="stStatusWidget"],
-[data-testid="stBottom"],
-[data-testid="stBottomBlockContainer"] {
-    display: none !important;
-    height: 0 !important;
-    min-height: 0 !important;
-    overflow: hidden !important;
-    visibility: hidden !important;
-}
-/* The iframe itself */
-iframe {
-    display: block !important;
-    border: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100vw !important;
-    height: 100vh !important;
-    z-index: 9999 !important;
+#MainMenu,footer,header,[data-testid="stToolbar"],
+[data-testid="stDecoration"],[data-testid="stStatusWidget"],
+[data-testid="stBottom"],[data-testid="stBottomBlockContainer"],
+[data-testid="stSidebar"]{display:none!important;}
+[data-testid="stMainBlockContainer"],.block-container,
+section[data-testid="stMain"]{
+    padding:0!important;margin:0!important;max-width:100%!important;}
+/* Fixed Sign In button overlay */
+.sw-signin-overlay{
+    position:fixed;top:18px;right:24px;z-index:999999;
 }
 </style>""", unsafe_allow_html=True)
 
-    html_path = Path(__file__).parent / 'landing.html'
-    if not html_path.exists():
-        html_path = Path('/home/claude/landing.html')
+    # Landing page iframe — pure display, no JS navigation needed
+    try:
+        html = html_path.read_text()
+    except Exception:
+        st.error("landing.html not found in dashboard/")
+        return
 
-    html = html_path.read_text()
+    for tok, col in [
+        ('__CA2__', t['card2']), ('__AC__', t['accent']),
+        ('__SU__', t['success']), ('__WA__', t['warning']),
+        ('__DA__', t['danger']), ('__BG__', t['bg']),
+        ('__CA__', t['card']),   ('__BO__', t['border']),
+        ('__B2__', t['border2']),('__TH__', t['text_h']),
+        ('__TM__', t['text_m']), ('__TX__', t['text']),
+    ]:
+        html = html.replace(tok, col)
 
-    current_theme = st.session_state.get("theme_choice", "dark")
-    signin_script = """
-<script>
-(function(){
-    // Read saved theme from localStorage, fallback to server-rendered default
-    var saved = localStorage.getItem('suddwatch_theme');
-    var __theme = saved || '""" + current_theme + """';
-
-    // Apply theme class immediately (before paint)
-    if(__theme === 'light'){
-        document.documentElement.classList.add('light-mode');
-    } else {
-        document.documentElement.classList.remove('light-mode');
-    }
-
-    // Sign in — form submit to _top
-    window.__suddSignin = function(){
-        var f = document.createElement('form');
-        f.method = 'GET';
-        f.action = (window.top || window.parent).location.href.split('?')[0];
-        f.target = '_top';
-        var i = document.createElement('input');
-        i.type='hidden'; i.name='go'; i.value='signin';
-        f.appendChild(i);
-        var i2 = document.createElement('input');
-        i2.type='hidden'; i2.name='theme'; i2.value=__theme;
-        f.appendChild(i2);
-        document.body.appendChild(f);
-        f.submit();
-        document.body.removeChild(f);
-    };
-
-    // Theme toggle — instant, no reload, no new tab
-    window.__suddTheme = function(){
-        var next = __theme === 'dark' ? 'light' : 'dark';
-        __theme = next;
-        localStorage.setItem('suddwatch_theme', next);
-        if(next === 'light'){
-            document.documentElement.classList.add('light-mode');
-        } else {
-            document.documentElement.classList.remove('light-mode');
-        }
-        // Update button icon
-        var btn = document.getElementById('themeToggleBtn');
-        if(btn){
-            btn.innerHTML = next === 'dark'
-                ? '<i class=\"ti ti-sun\"></i>'
-                : '<i class=\"ti ti-moon\"></i>';
-        }
-    };
-
-    // Set correct icon on load
-    document.addEventListener('DOMContentLoaded', function(){
-        var btn = document.getElementById('themeToggleBtn');
-        if(btn){
-            btn.innerHTML = __theme === 'dark'
-                ? '<i class=\"ti ti-sun\"></i>'
-                : '<i class=\"ti ti-moon\"></i>';
-            btn.title = 'Toggle theme';
-        }
-    });
-})();
-</script>"""
-    html = html.replace('</head>', signin_script + '</head>')
+    # Neutralise the iframe signin buttons — they can't navigate parent
+    # Just scroll to top so user sees the Streamlit Sign In button
     html = html.replace(
         "window.parent.postMessage({cmd:'signin'}, '*');",
-        "window.__suddSignin();"
+        "window.scrollTo(0,0);"
     )
 
-    html = (html
-        .replace('__CA2__', t['card2'])
-        .replace('__AC__',  t['accent'])
-        .replace('__SU__',  t['success'])
-        .replace('__WA__',  t['warning'])
-        .replace('__DA__',  t['danger'])
-        .replace('__BG__',  t['bg'])
-        .replace('__CA__',  t['card'])
-        .replace('__BO__',  t['border'])
-        .replace('__B2__',  t['border2'])
-        .replace('__TH__',  t['text_h'])
-        .replace('__TM__',  t['text_m'])
-        .replace('__TX__',  t['text'])
-    )
+    components.html(html, height=100000, scrolling=True)
 
-    components.html(html, height=800, scrolling=True)
-
+    # Fixed Sign In button - appears as overlay top-right
+    st.markdown("""<style>
+div[data-testid="stButton"][data-key="landing_signin"] {
+    position: fixed !important;
+    top: 18px !important;
+    right: 24px !important;
+    z-index: 999999 !important;
+}
+div[data-testid="stButton"][data-key="landing_signin"] button {
+    background: #0ea5e9 !important;
+    color: #fff !important;
+    border: none !important;
+    padding: 10px 24px !important;
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    border-radius: 8px !important;
+    cursor: pointer !important;
+    box-shadow: 0 4px 16px rgba(14,165,233,.4) !important;
+}
+</style>""", unsafe_allow_html=True)
+    if st.button("Sign In", key="landing_signin"):
+        st.session_state["auth_page"] = "login"
+        st.rerun()
 
 
 def page_auth(t):
@@ -1111,7 +1044,7 @@ def _fig(h=220, **overrides):
     return layout
 
 # ── SVG Map (pure HTML — no iframe, fills container natively) ─
-MAP_HTML = f"""
+MAP_HTML = """
 <div style="position:relative;width:100%;padding-top:75%;
             background:#07111a;border:1px solid {s.BORDER};
             border-radius:4px;overflow:hidden;">
@@ -1242,7 +1175,7 @@ def render_sidebar():
         "Admin":       """<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>""",
     }
 
-    user = current_user()
+    user = st.session_state.get("sw_auth", {})
     role = user.get("role", "User")
     name = user.get("name", "User")
     email = user.get("email", "")
@@ -1349,7 +1282,7 @@ def render_sidebar():
 
         # ── Sign out ──────────────────────────────────────
         if st.button("Sign out", key="btn_signout", use_container_width=True):
-            logout()
+            st.session_state.pop("sw_auth", None)
             st.rerun()
 
 
@@ -3245,447 +3178,91 @@ def render_intelligence_feed():
     )
 
 # ════════════════════════════════════════════════════════════
-# MAIN — Auth gate + dashboard routing
+
 # ════════════════════════════════════════════════════════════
-init_auth_db()
-apply_theme()
-st.markdown(s.GLOBAL_CSS, unsafe_allow_html=True)
+# MAIN
+# ════════════════════════════════════════════════════════════
+st.sidebar.write("checkpoint 3: functions OK — MAIN reached")
 
-# Handle ?go=signin from landing page iframe
-try:
-    if st.query_params.get("go") == "signin":
-        st.session_state["auth_page"] = "login"
-        st.query_params.clear()
-        st.rerun()
-except Exception:
-    pass
+for _k, _v in {
+    "page": "Home", "hist_state": "All",
+    "hist_min_iou": 0.65, "hist_min_pop": 0,
+    "export_scope": "Single Event", "export_fmt": "GeoJSON",
+    "export_layers": {"Flood Extent Polygon","Affected Villages","Health Facilities at Risk"},
+    "export_events": {"EVT-2025-047"}, "export_done": False,
+    "show_glossary": False,
+}.items():
+    if _k not in st.session_state:
+        st.session_state[_k] = _v
 
-# Auth gate
-if not is_logged_in():
-    _t = get_theme()
-    if st.session_state.get("auth_page") == "login":
-        page_auth(_t)
-    else:
-        page_landing(_t)
+if not st.session_state.get("sw_auth"):
+    st.markdown("""<style>
+[data-testid="stSidebar"]{display:none!important;}
+#MainMenu,footer,header,[data-testid="stToolbar"],
+[data-testid="stDecoration"],[data-testid="stStatusWidget"],
+[data-testid="stBottom"]{display:none!important;}
+</style>""", unsafe_allow_html=True)
+
+    _, mid, _ = st.columns([1, 1, 1])
+    with mid:
+        st.markdown(f"""
+<div style='text-align:center;margin:60px 0 28px;'>
+  <div style='font-family:Barlow Condensed,sans-serif;font-size:36px;
+    font-weight:800;color:{s.FG};letter-spacing:.08em;'>SUDDWATCH</div>
+  <div style='font-size:13px;color:{s.MUTED};margin-top:4px;'>
+    Flood Detection &amp; Alert System &middot; Greater Upper Nile</div>
+</div>""", unsafe_allow_html=True)
+
+        _email = st.text_input("Email", placeholder="you@organisation.org",
+                               key="sw_email_input")
+        _pass  = st.text_input("Password", type="password",
+                               key="sw_pass_input")
+
+        if st.button("Sign in", use_container_width=True,
+                     type="primary", key="sw_signin_btn"):
+            _u = DEMO_USERS.get(_email.strip().lower())
+            if _u and _u["password"] == _pass:
+                st.session_state["sw_auth"] = {
+                    "email": _email.strip().lower(),
+                    "name":  _u["name"],
+                    "role":  _u["role"],
+                }
+                st.rerun()
+            else:
+                st.error("Incorrect email or password.")
+
+        st.markdown(f"""
+<div style='margin-top:12px;padding:12px;background:{s.CARD};
+  border:1px solid {s.BORDER};border-radius:8px;
+  font-size:12px;color:{s.MUTED};'>
+  <div style='font-size:10px;font-family:DM Mono,monospace;
+    text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;'>
+    Demo accounts</div>
+  <div style='margin-bottom:3px;'>
+    <code style='color:{s.FG};'>admin@suddwatch.org</code>
+    &nbsp;/&nbsp;<code style='color:{s.FG};'>admin123</code></div>
+  <div>
+    <code style='color:{s.FG};'>coord@ocha.org</code>
+    &nbsp;/&nbsp;<code style='color:{s.FG};'>ocha2025</code></div>
+</div>""", unsafe_allow_html=True)
+
     st.stop()
 
-# ── Logged-in: run the original dashboard ────────────────
-st.markdown("""<style>
-[data-testid="stSidebar"]{display:flex!important;}
-[data-testid="stMainBlockContainer"],.block-container{
-    padding:1rem!important;max-width:100%!important;}
-iframe{position:static!important;width:auto!important;
-    height:auto!important;z-index:auto!important;}
-</style>""", unsafe_allow_html=True)
+st.write("A: after auth gate")
+st.markdown(s.GLOBAL_CSS, unsafe_allow_html=True)
+st.write("B: GLOBAL_CSS ok")
 render_sidebar()
-event    = _cached_active_event()
+st.write("C: render_sidebar ok")
+event = _cached_active_event()
+st.write("D: db ok")
 last_evt = event.get("date_utc", "—") if event else "—"
 render_topbar(last_evt)
-render_breadcrumb({
-    "Home":        "Dashboard — Live Event",
-    "History":     "History — Flood Events Archive",
-    "Performance": "Performance — System Metrics",
-    "Export":      "Export — Data & Reports",
-}.get(st.session_state.page, ""))
-
+st.write("E: topbar ok")
+render_breadcrumb({"Home":"Home"}.get(st.session_state.page,""))
+st.write("F: breadcrumb ok")
 page = st.session_state.page
 if   page == "Home":        page_home()
 elif page == "History":     page_history()
 elif page == "Performance": page_performance()
 elif page == "Export":      page_export()
-elif page == "Admin":
-    user = current_user()
-    if user.get("role") != "Admin":
-        st.error("Access denied — Admin role required.")
-        st.stop()
-
-    st.markdown(
-        f"<div style='font-family:Barlow Condensed,sans-serif;font-size:28px;"
-        f"font-weight:700;color:{s.FG};letter-spacing:.03em;padding:4px 0 20px;'>Admin Panel</div>",
-        unsafe_allow_html=True
-    )
-
-    tab_users, tab_alerts, tab_pipeline, tab_audit, tab_system = st.tabs([
-        "User Management", "Alert Configuration", "Pipeline Controls",
-        "Audit Log", "System Health"
-    ])
-
-    # ══ TAB 1 — USER MANAGEMENT ══════════════════════════════════════════
-    with tab_users:
-        col_users, col_requests = st.columns([1, 1], gap="small")
-
-        with col_users:
-            st.markdown(
-                f"<div style='font-family:DM Mono,monospace;font-size:11px;"
-                f"color:{s.MUTED};text-transform:uppercase;letter-spacing:.08em;"
-                f"margin-bottom:14px;'>Active accounts</div>",
-                unsafe_allow_html=True
-            )
-            for email, uname, urole, created in auth_get_users():
-                rc = s.ACCENT if urole == "Admin" else s.SUCCESS
-                c_info, c_action = st.columns([3, 1])
-                with c_info:
-                    st.markdown(
-                        f"<div style='background:{s.CARD};border:1px solid {s.BORDER};"
-                        f"border-radius:8px;padding:14px 16px;'>"
-                        f"<div style='display:flex;justify-content:space-between;align-items:center;'>"
-                        f"<div>"
-                        f"<div style='font-size:14px;font-weight:600;color:{s.FG};'>{uname}</div>"
-                        f"<div style='font-size:12px;color:{s.MUTED};margin-top:2px;'>{email}</div>"
-                        f"<div style='font-size:11px;color:{s.MUTED};margin-top:2px;'>Since {created[:10]}</div>"
-                        f"</div>"
-                        f"<span style='font-size:11px;padding:3px 10px;border-radius:20px;"
-                        f"background:rgba(14,165,233,.1);color:{rc};font-weight:600;'>{urole}</span>"
-                        f"</div></div>",
-                        unsafe_allow_html=True
-                    )
-                with c_action:
-                    if email != user.get("email"):  # can't deactivate yourself
-                        if urole != "Admin":
-                            if st.button("Make Admin", key=f"mk_adm_{email}", use_container_width=True):
-                                con = __import__("sqlite3").connect(AUTH_DB)
-                                con.execute("UPDATE users SET role='Admin' WHERE email=?", (email,))
-                                con.commit(); con.close()
-                                st.success(f"{uname} is now Admin")
-                                st.rerun()
-                        if st.button("Deactivate", key=f"deact_{email}", use_container_width=True):
-                            con = __import__("sqlite3").connect(AUTH_DB)
-                            con.execute("UPDATE users SET active=0 WHERE email=?", (email,))
-                            con.commit(); con.close()
-                            st.warning(f"Deactivated {uname}")
-                            st.rerun()
-
-        with col_requests:
-            pending = auth_get_requests()
-            st.markdown(
-                f"<div style='font-family:DM Mono,monospace;font-size:11px;"
-                f"color:{s.MUTED};text-transform:uppercase;letter-spacing:.08em;"
-                f"margin-bottom:14px;'>Pending requests "
-                f"{'(' + str(len(pending)) + ')' if pending else '(0)'}</div>",
-                unsafe_allow_html=True
-            )
-            if not pending:
-                st.markdown(
-                    f"<div style='background:{s.CARD};border:1px solid {s.BORDER};"
-                    f"border-radius:8px;padding:20px;text-align:center;"
-                    f"color:{s.MUTED};font-size:14px;'>No pending requests</div>",
-                    unsafe_allow_html=True
-                )
-            for req_id, rname, org, remail, rrole, submitted in pending:
-                st.markdown(
-                    f"<div style='background:{s.CARD};border:1px solid {s.BORDER};"
-                    f"border-radius:8px;padding:14px 16px;margin-bottom:8px;'>"
-                    f"<div style='font-size:14px;font-weight:600;color:{s.FG};'>{rname}</div>"
-                    f"<div style='font-size:12px;color:{s.MUTED};margin-top:2px;'>{org} &middot; {remail}</div>"
-                    f"<div style='font-size:11px;color:{s.MUTED};margin-top:2px;'>"
-                    f"Role: {rrole} &middot; Submitted {submitted[:10]}</div>"
-                    f"</div>",
-                    unsafe_allow_html=True
-                )
-                ap_col, rj_col = st.columns(2)
-                with ap_col:
-                    if st.button("Approve", key=f"ap_{req_id}", type="primary", use_container_width=True):
-                        auth_approve(req_id)
-                        st.success(f"Approved {rname} — account created")
-                        st.rerun()
-                with rj_col:
-                    if st.button("Reject", key=f"rj_{req_id}", use_container_width=True):
-                        auth_reject(req_id)
-                        st.warning(f"Rejected {rname}")
-                        st.rerun()
-
-    # ══ TAB 2 — ALERT CONFIGURATION ══════════════════════════════════════
-    with tab_alerts:
-        st.markdown(
-            f"<div style='font-family:DM Mono,monospace;font-size:11px;"
-            f"color:{s.MUTED};text-transform:uppercase;letter-spacing:.08em;"
-            f"margin-bottom:20px;'>Alert delivery settings</div>",
-            unsafe_allow_html=True
-        )
-        col_sms, col_email = st.columns(2, gap="small")
-
-        with col_sms:
-            st.markdown(
-                f"<div style='background:{s.CARD};border:1px solid {s.BORDER};"
-                f"border-radius:8px;padding:16px;'>"
-                f"<div style='font-size:14px;font-weight:600;color:{s.FG};"
-                f"margin-bottom:12px;'>SMS Recipients</div>"
-                f"<div style='font-size:13px;color:{s.MUTED};margin-bottom:12px;'>"
-                f"These phone numbers receive flood alerts via Twilio SMS.</div>"
-                f"</div>",
-                unsafe_allow_html=True
-            )
-            sms_recipients = st.session_state.get("sms_recipients", ["+254705176665"])
-            for i, num in enumerate(sms_recipients):
-                c1, c2 = st.columns([3, 1])
-                with c1:
-                    st.text_input(f"Number {i+1}", value=num, key=f"sms_{i}",
-                                  label_visibility="collapsed")
-                with c2:
-                    if st.button("Remove", key=f"rm_sms_{i}", use_container_width=True):
-                        sms_recipients.pop(i)
-                        st.session_state["sms_recipients"] = sms_recipients
-                        st.rerun()
-            new_sms = st.text_input("Add phone number", placeholder="+254...", key="new_sms")
-            if st.button("Add SMS recipient", use_container_width=True):
-                if new_sms:
-                    sms_recipients.append(new_sms)
-                    st.session_state["sms_recipients"] = sms_recipients
-                    st.rerun()
-
-            st.divider()
-            st.markdown("**Alert thresholds**")
-            st.slider("Minimum flood extent to trigger alert (ha)",
-                      50, 500, 100, 10, key="min_flood_ha")
-            st.slider("Minimum affected population",
-                      100, 5000, 500, 100, key="min_pop")
-
-        with col_email:
-            st.markdown(
-                f"<div style='background:{s.CARD};border:1px solid {s.BORDER};"
-                f"border-radius:8px;padding:16px;'>"
-                f"<div style='font-size:14px;font-weight:600;color:{s.FG};"
-                f"margin-bottom:12px;'>Email Recipients</div>"
-                f"<div style='font-size:13px;color:{s.MUTED};margin-bottom:12px;'>"
-                f"These addresses receive HTML situation reports via Gmail SMTP.</div>"
-                f"</div>",
-                unsafe_allow_html=True
-            )
-            email_recipients = st.session_state.get("email_recipients",
-                ["coord@ocha.org", "analyst@reach.org"])
-            for i, em in enumerate(email_recipients):
-                c1, c2 = st.columns([3, 1])
-                with c1:
-                    st.text_input(f"Email {i+1}", value=em, key=f"em_{i}",
-                                  label_visibility="collapsed")
-                with c2:
-                    if st.button("Remove", key=f"rm_em_{i}", use_container_width=True):
-                        email_recipients.pop(i)
-                        st.session_state["email_recipients"] = email_recipients
-                        st.rerun()
-            new_em = st.text_input("Add email", placeholder="name@org.org", key="new_em")
-            if st.button("Add email recipient", use_container_width=True):
-                if new_em and "@" in new_em:
-                    email_recipients.append(new_em)
-                    st.session_state["email_recipients"] = email_recipients
-                    st.rerun()
-
-            st.divider()
-            st.markdown("**Test alerts**")
-            c_ts, c_te = st.columns(2)
-            with c_ts:
-                if st.button("Send test SMS", use_container_width=True, type="primary"):
-                    st.info("Test SMS queued — check Twilio logs for delivery status.")
-            with c_te:
-                if st.button("Send test email", use_container_width=True, type="primary"):
-                    st.info("Test email queued — check Gmail sent folder.")
-
-    # ══ TAB 3 — PIPELINE CONTROLS ════════════════════════════════════════
-    with tab_pipeline:
-        st.markdown(
-            f"<div style='font-family:DM Mono,monospace;font-size:11px;"
-            f"color:{s.MUTED};text-transform:uppercase;letter-spacing:.08em;"
-            f"margin-bottom:20px;'>Pipeline status and manual controls</div>",
-            unsafe_allow_html=True
-        )
-        col_status, col_controls = st.columns([1, 1], gap="small")
-
-        with col_status:
-            stages = [
-                ("Data Acquisition",  "Copernicus OData API",    "OK",      "2025-10-23 13:44"),
-                ("Preprocessing",     "ESA SNAP / gpt",          "OK",      "2025-10-23 13:52"),
-                ("Flood Detection",   "Otsu + RF Classifier",    "OK",      "2025-10-23 13:58"),
-                ("Risk Assessment",   "WorldPop + OSM overlay",  "OK",      "2025-10-23 14:07"),
-                ("Alert Dispatch",    "Twilio SMS + Gmail SMTP", "OK",      "2025-10-23 14:17"),
-            ]
-            for stage, detail, status, ts in stages:
-                sc = s.SUCCESS if status == "OK" else s.DANGER
-                st.markdown(
-                    f"<div style='background:{s.CARD};border:1px solid {s.BORDER};"
-                    f"border-left:3px solid {sc};border-radius:0 8px 8px 0;"
-                    f"padding:12px 16px;margin-bottom:8px;'>"
-                    f"<div style='display:flex;justify-content:space-between;align-items:center;'>"
-                    f"<div>"
-                    f"<div style='font-size:14px;font-weight:600;color:{s.FG};'>{stage}</div>"
-                    f"<div style='font-size:12px;color:{s.MUTED};'>{detail}</div>"
-                    f"</div>"
-                    f"<div style='text-align:right;'>"
-                    f"<div style='font-size:12px;font-weight:600;color:{sc};'>{status}</div>"
-                    f"<div style='font-size:11px;color:{s.MUTED};'>{ts[:16]}</div>"
-                    f"</div></div></div>",
-                    unsafe_allow_html=True
-                )
-
-        with col_controls:
-            st.markdown(
-                f"<div style='background:{s.CARD};border:1px solid {s.BORDER};"
-                f"border-radius:8px;padding:16px;margin-bottom:12px;'>"
-                f"<div style='font-size:14px;font-weight:600;color:{s.FG};"
-                f"margin-bottom:8px;'>Manual controls</div>"
-                f"<div style='font-size:13px;color:{s.MUTED};'>"
-                f"Trigger a full pipeline run or individual stages.</div></div>",
-                unsafe_allow_html=True
-            )
-            if st.button("Run full pipeline now", type="primary", use_container_width=True):
-                with st.spinner("Triggering pipeline..."):
-                    import time; time.sleep(1)
-                st.success("Pipeline triggered — check logs for progress.")
-
-            st.divider()
-            st.markdown("**Detection settings**")
-            st.slider("IOU threshold (detection quality floor)",
-                      0.5, 0.95, 0.65, 0.01, key="iou_thresh",
-                      help="Events below this IOU score are discarded as low confidence")
-            st.slider("Minimum flood area (ha)",
-                      10, 500, 50, 10, key="min_area",
-                      help="Flood extents smaller than this are filtered out")
-            st.slider("Speckle filter window size",
-                      3, 9, 5, 2, key="speckle_win",
-                      help="Lee filter window — larger = smoother but less detail")
-
-            st.divider()
-            if st.button("Force Copernicus data refresh", use_container_width=True):
-                st.info("Copernicus API refresh queued.")
-            if st.button("Clear processing cache", use_container_width=True):
-                st.info("Cache cleared.")
-
-    # ══ TAB 4 — AUDIT LOG ════════════════════════════════════════════════
-    with tab_audit:
-        st.markdown(
-            f"<div style='font-family:DM Mono,monospace;font-size:11px;"
-            f"color:{s.MUTED};text-transform:uppercase;letter-spacing:.08em;"
-            f"margin-bottom:20px;'>Full system audit trail</div>",
-            unsafe_allow_html=True
-        )
-        log_type = st.selectbox("Filter by type",
-            ["All", "Pipeline runs", "Alerts sent", "User logins", "Access requests"],
-            key="audit_filter")
-
-        # Demo audit entries
-        audit_entries = [
-            ("2025-10-23 14:17", "Alert Dispatch",  "SMS sent to +254705176665",         "OK"),
-            ("2025-10-23 14:17", "Alert Dispatch",  "Email sent to coord@ocha.org",       "OK"),
-            ("2025-10-23 14:07", "Risk Assessment", "7,712 villages scored",              "OK"),
-            ("2025-10-23 13:58", "Flood Detection", "IoU=0.71, 1,200 ha detected",       "OK"),
-            ("2025-10-23 13:52", "Preprocessing",   "SNAP gpt completed in 6.2 min",     "OK"),
-            ("2025-10-23 13:44", "Data Acquisition","S1A_IW_GRDH downloaded (2.1 GB)",   "OK"),
-            ("2025-10-23 13:40", "User Login",      "admin@suddwatch.org signed in",     "OK"),
-            ("2025-10-22 08:15", "Access Request",  "New request from Field User",        "PENDING"),
-            ("2025-10-21 11:32", "Alert Dispatch",  "SMS failed: +260... unreachable",   "FAIL"),
-            ("2025-10-21 10:05", "Pipeline run",    "Full run completed in 33 min",       "OK"),
-        ]
-
-        for ts, log_t, msg, status in audit_entries:
-            sc = s.SUCCESS if status == "OK" else s.DANGER if status == "FAIL" else s.WARNING
-            st.markdown(
-                f"<div style='display:flex;align-items:center;gap:12px;"
-                f"padding:10px 14px;border-bottom:1px solid {s.BORDER};"
-                f"font-family:Inter,sans-serif;'>"
-                f"<span style='font-family:DM Mono,monospace;font-size:11px;"
-                f"color:{s.MUTED};width:130px;flex-shrink:0;'>{ts}</span>"
-                f"<span style='font-size:11px;padding:2px 8px;border-radius:4px;"
-                f"background:{s.CARD};color:{s.MUTED};border:1px solid {s.BORDER};"
-                f"flex-shrink:0;'>{log_t}</span>"
-                f"<span style='font-size:13px;color:{s.FG};flex:1;'>{msg}</span>"
-                f"<span style='font-size:11px;font-weight:600;color:{sc};'>{status}</span>"
-                f"</div>",
-                unsafe_allow_html=True
-            )
-
-        st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
-        if st.button("Export full audit log (CSV)", use_container_width=True):
-            import csv, io
-            buf = io.StringIO()
-            w = csv.writer(buf)
-            w.writerow(["Timestamp", "Type", "Message", "Status"])
-            w.writerows(audit_entries)
-            st.download_button("Download CSV", buf.getvalue(),
-                               "suddwatch_audit.csv", "text/csv",
-                               use_container_width=True)
-
-    # ══ TAB 5 — SYSTEM HEALTH ════════════════════════════════════════════
-    with tab_system:
-        st.markdown(
-            f"<div style='font-family:DM Mono,monospace;font-size:11px;"
-            f"color:{s.MUTED};text-transform:uppercase;letter-spacing:.08em;"
-            f"margin-bottom:20px;'>Live system health indicators</div>",
-            unsafe_allow_html=True
-        )
-        col_a, col_b = st.columns(2, gap="small")
-
-        with col_a:
-            services = [
-                ("Copernicus Data Space", "OData API v1",      "Online",  "13:44 UTC", "99.8%"),
-                ("ReliefWeb API",         "v2 · approved app", "Online",  "14:05 UTC", "100%"),
-                ("Twilio SMS",            "NBO50-P1 · HTTP 200","Online", "14:17 UTC", "97.3%"),
-                ("Gmail SMTP",            "SSL port 465",       "Online",  "14:17 UTC", "99.1%"),
-                ("ESA SNAP",              "gpt · v9.0.0",       "Online",  "13:52 UTC", "100%"),
-            ]
-            st.markdown(
-                f"<div style='font-size:14px;font-weight:600;color:{s.FG};"
-                f"margin-bottom:12px;'>External services</div>",
-                unsafe_allow_html=True
-            )
-            for name, detail, status, last, uptime in services:
-                sc = s.SUCCESS if status == "Online" else s.DANGER
-                st.markdown(
-                    f"<div style='background:{s.CARD};border:1px solid {s.BORDER};"
-                    f"border-radius:8px;padding:12px 16px;margin-bottom:8px;"
-                    f"display:flex;justify-content:space-between;align-items:center;'>"
-                    f"<div>"
-                    f"<div style='font-size:14px;font-weight:500;color:{s.FG};'>{name}</div>"
-                    f"<div style='font-size:12px;color:{s.MUTED};'>{detail} &middot; last: {last}</div>"
-                    f"</div>"
-                    f"<div style='text-align:right;'>"
-                    f"<div style='font-size:12px;font-weight:600;color:{sc};'>{status}</div>"
-                    f"<div style='font-size:11px;color:{s.MUTED};'>uptime {uptime}</div>"
-                    f"</div></div>",
-                    unsafe_allow_html=True
-                )
-
-        with col_b:
-            st.markdown(
-                f"<div style='font-size:14px;font-weight:600;color:{s.FG};"
-                f"margin-bottom:12px;'>Storage & database</div>",
-                unsafe_allow_html=True
-            )
-            storage_items = [
-                ("SQLite pipeline DB",  "suddwatch_dash.db",  "40.9 MB"),
-                ("Auth database",       "auth.db",            "0.1 MB"),
-                ("Processing logs",     "logs/",              "12.4 MB"),
-                ("SAR data cache",      "data/raw/",          "4.2 GB"),
-                ("Flood masks",         "data/flood_masks/",  "312 MB"),
-            ]
-            for label, path, size in storage_items:
-                st.markdown(
-                    f"<div style='background:{s.CARD};border:1px solid {s.BORDER};"
-                    f"border-radius:8px;padding:12px 16px;margin-bottom:8px;"
-                    f"display:flex;justify-content:space-between;align-items:center;'>"
-                    f"<div>"
-                    f"<div style='font-size:14px;font-weight:500;color:{s.FG};'>{label}</div>"
-                    f"<div style='font-family:DM Mono,monospace;font-size:11px;color:{s.MUTED};'>{path}</div>"
-                    f"</div>"
-                    f"<div style='font-family:Barlow Condensed,sans-serif;font-size:18px;"
-                    f"font-weight:700;color:{s.ACCENT};'>{size}</div>"
-                    f"</div>",
-                    unsafe_allow_html=True
-                )
-
-            st.divider()
-            st.markdown(
-                f"<div style='font-size:14px;font-weight:600;color:{s.FG};"
-                f"margin-bottom:8px;'>Season management</div>",
-                unsafe_allow_html=True
-            )
-            st.markdown(
-                f"<div style='background:{s.CARD};border:1px solid {s.BORDER};"
-                f"border-radius:8px;padding:14px 16px;margin-bottom:12px;'>"
-                f"<div style='font-size:13px;color:{s.MUTED};'>"
-                f"Current season: <span style='color:{s.FG};font-weight:600;'>2025 Flood Season</span>"
-                f" &middot; 47 events &middot; opened May 2025</div></div>",
-                unsafe_allow_html=True
-            )
-            if st.button("Close 2025 season & archive", use_container_width=True):
-                st.warning("Season closure requires confirmation. This action cannot be undone.")
-            if st.button("Generate season summary report", use_container_width=True, type="primary"):
-                st.success("Season report queued — will appear in Export page within 60 seconds.")
+st.write("G: done")
