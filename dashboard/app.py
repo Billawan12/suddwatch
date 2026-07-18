@@ -769,28 +769,57 @@ def page_landing(t):
     from pathlib import Path
     html_path = Path(__file__).parent / "landing.html"
 
-    # Hide ALL Streamlit chrome - full screen landing
-    st.markdown("""<style>
+    # Kill ALL Streamlit chrome and padding completely
+    st.markdown(f"""<style>
 #MainMenu,footer,header,[data-testid="stToolbar"],
 [data-testid="stDecoration"],[data-testid="stStatusWidget"],
 [data-testid="stBottom"],[data-testid="stBottomBlockContainer"],
-[data-testid="stSidebar"]{display:none!important;}
+[data-testid="stSidebar"]{{display:none!important;}}
+html,body,[data-testid="stApp"],
+[data-testid="stAppViewContainer"]{{
+    padding:0!important;margin:0!important;overflow:hidden!important;
+    background:{t["bg"]}!important;}}
 [data-testid="stMainBlockContainer"],.block-container,
-section[data-testid="stMain"]{
-    padding:0!important;margin:0!important;max-width:100%!important;}
-/* Fixed Sign In button overlay */
-.sw-signin-overlay{
-    position:fixed;top:18px;right:24px;z-index:999999;
-}
+section[data-testid="stMain"],
+[data-testid="stVerticalBlock"]{{
+    padding:0!important;margin:0!important;
+    gap:0!important;max-width:100%!important;}}
+/* Sign In button — styled to match landing nav */
+div[data-testid="stButton"] button{{
+    position:fixed!important;
+    top:16px!important;
+    right:24px!important;
+    z-index:2147483647!important;
+    background:{t["accent"]}!important;
+    color:#fff!important;
+    border:none!important;
+    border-radius:8px!important;
+    padding:9px 22px!important;
+    font-size:14px!important;
+    font-weight:600!important;
+    letter-spacing:.01em!important;
+    box-shadow:0 2px 8px rgba(0,0,0,.25)!important;
+    cursor:pointer!important;
+    width:auto!important;
+    min-width:0!important;
+}}
+div[data-testid="stButton"] button:hover{{
+    background:{t["accent"]}cc!important;
+}}
 </style>""", unsafe_allow_html=True)
 
-    # Landing page iframe — pure display, no JS navigation needed
-    try:
-        html = html_path.read_text()
-    except Exception:
-        st.error("landing.html not found in dashboard/")
+    # The ONLY working sign-in mechanism in Safari
+    if st.button("Sign In", key="sw_land_signin"):
+        st.session_state["sw_page"] = "signin"
+        st.rerun()
+
+    if not html_path.exists():
+        st.error("landing.html not found.")
         return
 
+    html = html_path.read_text()
+
+    # Token replacement only
     for tok, col in [
         ('__CA2__', t['card2']), ('__AC__', t['accent']),
         ('__SU__', t['success']), ('__WA__', t['warning']),
@@ -801,38 +830,19 @@ section[data-testid="stMain"]{
     ]:
         html = html.replace(tok, col)
 
-    # Neutralise the iframe signin buttons — they can't navigate parent
-    # Just scroll to top so user sees the Streamlit Sign In button
+    # Disable landing page signin buttons silently
     html = html.replace(
         "window.parent.postMessage({cmd:'signin'}, '*');",
-        "window.scrollTo(0,0);"
+        "/* signin handled by Streamlit button */"
     )
 
-    components.html(html, height=100000, scrolling=True)
+    # Remove the landing page nav signin buttons via CSS
+    # so the fixed Streamlit button is the only one
+    html = html.replace('</head>',
+        '<style>nav .btn-primary,nav .btn-outline{display:none!important;}</style>'
+        '</head>')
 
-    # Fixed Sign In button - appears as overlay top-right
-    st.markdown("""<style>
-div[data-testid="stButton"][data-key="landing_signin"] {
-    position: fixed !important;
-    top: 18px !important;
-    right: 24px !important;
-    z-index: 999999 !important;
-}
-div[data-testid="stButton"][data-key="landing_signin"] button {
-    background: #0ea5e9 !important;
-    color: #fff !important;
-    border: none !important;
-    padding: 10px 24px !important;
-    font-size: 15px !important;
-    font-weight: 600 !important;
-    border-radius: 8px !important;
-    cursor: pointer !important;
-    box-shadow: 0 4px 16px rgba(14,165,233,.4) !important;
-}
-</style>""", unsafe_allow_html=True)
-    if st.button("Sign In", key="landing_signin"):
-        st.session_state["auth_page"] = "login"
-        st.rerun()
+    components.html(html, height=900, scrolling=True)
 
 
 def page_auth(t):
@@ -3178,6 +3188,7 @@ def render_intelligence_feed():
 # ════════════════════════════════════════════════════════════
 
 # ════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════
 # MAIN
 # ════════════════════════════════════════════════════════════
 
@@ -3192,50 +3203,67 @@ for _k, _v in {
     if _k not in st.session_state:
         st.session_state[_k] = _v
 
+# ── AUTH GATE ─────────────────────────────────────────────────
 if not st.session_state.get("sw_auth"):
-    st.markdown("""<style>
-[data-testid="stSidebar"]{display:none!important;}
+
+    if st.session_state.get("sw_page") == "signin":
+        # ── Sign-in / Request Access ──────────────────────────
+        st.markdown(f"""<style>
+[data-testid="stSidebar"]{{display:none!important;}}
 #MainMenu,footer,header,[data-testid="stToolbar"],
 [data-testid="stDecoration"],[data-testid="stStatusWidget"],
-[data-testid="stBottom"]{display:none!important;}
+[data-testid="stBottom"]{{display:none!important;}}
+html,body,[data-testid="stApp"],[data-testid="stAppViewContainer"]{{
+    background:{s.BG}!important;}}
+[data-testid="stMainBlockContainer"],.block-container{{
+    background:{s.BG}!important;}}
+/* Suppress Streamlit's rerun overlay flash */
+[data-testid="stStatusWidget"]{{display:none!important;}}
+.stApp > div:first-child{{transition:none!important;}}
 </style>""", unsafe_allow_html=True)
 
-    _, mid, _ = st.columns([1, 1, 1])
-    with mid:
-        st.markdown(f"""
-<div style='text-align:center;margin:60px 0 28px;'>
-  <div style='font-family:Barlow Condensed,sans-serif;font-size:36px;
+        _, mid, _ = st.columns([1, 1.2, 1])
+        with mid:
+            st.markdown("<div style='height:48px'></div>",
+                        unsafe_allow_html=True)
+            st.markdown(f"""
+<div style='text-align:center;margin-bottom:28px;'>
+  <div style='font-family:Barlow Condensed,sans-serif;font-size:34px;
     font-weight:800;color:{s.FG};letter-spacing:.08em;'>SUDDWATCH</div>
   <div style='font-size:13px;color:{s.MUTED};margin-top:4px;'>
     Flood Detection &amp; Alert System &middot; Greater Upper Nile</div>
 </div>""", unsafe_allow_html=True)
 
-        _email = st.text_input("Email", placeholder="you@organisation.org",
-                               key="sw_email_input")
-        _pass  = st.text_input("Password", type="password",
-                               key="sw_pass_input")
+            tab_in, tab_up = st.tabs(["Sign In", "Request Access"])
 
-        if st.button("Sign in", use_container_width=True,
-                     type="primary", key="sw_signin_btn"):
-            _u = DEMO_USERS.get(_email.strip().lower())
-            if _u and _u["password"] == _pass:
-                st.session_state["sw_auth"] = {
-                    "email": _email.strip().lower(),
-                    "name":  _u["name"],
-                    "role":  _u["role"],
-                }
-                st.rerun()
-            else:
-                st.error("Incorrect email or password.")
+            with tab_in:
+                with st.form("sw_login_form"):
+                    _email  = st.text_input("Email address",
+                                placeholder="you@organisation.org")
+                    _pass   = st.text_input("Password", type="password")
+                    _submit = st.form_submit_button("Sign in",
+                                use_container_width=True)
+                if _submit:
+                    _u = DEMO_USERS.get(_email.strip().lower())
+                    if _u and _u["password"] == _pass:
+                        st.session_state["sw_auth"] = {
+                            "email": _email.strip().lower(),
+                            "name":  _u["name"],
+                            "role":  _u["role"],
+                        }
+                        st.session_state.pop("sw_page", None)
+                        st.rerun()
+                    else:
+                        st.error("Incorrect email or password.")
 
-        st.markdown(f"""
-<div style='margin-top:12px;padding:12px;background:{s.CARD};
+                st.markdown(f"""
+<div style='margin-top:14px;padding:12px 14px;background:{s.BG};
   border:1px solid {s.BORDER};border-radius:8px;
   font-size:12px;color:{s.MUTED};'>
-  <div style='font-size:10px;font-family:DM Mono,monospace;
-    text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;'>
+  <div style='font-family:DM Mono,monospace;font-size:10px;
+    text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;'>
     Demo accounts</div>
-  <div style='margin-bottom:3px;'>
+  <div style='margin-bottom:4px;'>
     <code style='color:{s.FG};'>admin@suddwatch.org</code>
     &nbsp;/&nbsp;<code style='color:{s.FG};'>admin123</code></div>
   <div>
@@ -3243,16 +3271,110 @@ if not st.session_state.get("sw_auth"):
     &nbsp;/&nbsp;<code style='color:{s.FG};'>ocha2025</code></div>
 </div>""", unsafe_allow_html=True)
 
+            with tab_up:
+                st.markdown(
+                    f"<p style='font-size:14px;color:{s.MUTED};"
+                    f"margin-bottom:16px;'>Submit a request. An administrator "
+                    f"will activate your account within 24 hours.</p>",
+                    unsafe_allow_html=True)
+                with st.form("sw_signup_form"):
+                    _ru_name  = st.text_input("Full name")
+                    _ru_org   = st.text_input("Organisation")
+                    _ru_email = st.text_input("Work email")
+                    _ru_pw    = st.text_input("Password", type="password")
+                    _ru_pw2   = st.text_input("Confirm password",
+                                              type="password")
+                    _ru_sub   = st.form_submit_button("Submit request",
+                                    use_container_width=True)
+                if _ru_sub:
+                    if not all([_ru_name, _ru_org, _ru_email, _ru_pw]):
+                        st.error("Please fill in all fields.")
+                    elif _ru_pw != _ru_pw2:
+                        st.error("Passwords do not match.")
+                    elif "@" not in _ru_email:
+                        st.error("Enter a valid email address.")
+                    else:
+                        st.success(
+                            f"Request submitted for {_ru_name} ({_ru_org}). "
+                            "An admin will activate your account within 24 hrs.")
+
+            st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+            if st.button("← Back to home", key="sw_back",
+                         use_container_width=True):
+                st.session_state.pop("sw_page", None)
+                st.rerun()
+
+    else:
+        # ── Landing page ──────────────────────────────────────
+        try:
+            _qp = st.query_params.get("sw_go", "")
+            if _qp == "signin":
+                st.session_state["sw_page"] = "signin"
+                st.query_params.clear()
+                st.rerun()
+        except Exception:
+            pass
+
+        page_landing({
+            "accent":  s.ACCENT,  "bg":      s.BG,
+            "card":    s.CARD,    "card2":   s.MUTED_BG,
+            "border":  s.BORDER,  "border2": "#30363d",
+            "text_h":  s.FG,      "text_m":  s.MUTED,
+            "text":    s.FG,      "success": s.SUCCESS,
+            "warning": s.WARNING, "danger":  s.DANGER,
+        })
+
     st.stop()
 
+# ── LOGGED IN — DASHBOARD ─────────────────────────────────────
 st.markdown(s.GLOBAL_CSS, unsafe_allow_html=True)
 render_sidebar()
-event = _cached_active_event()
+event    = _cached_active_event()
 last_evt = event.get("date_utc", "—") if event else "—"
 render_topbar(last_evt)
-render_breadcrumb({"Home":"Home"}.get(st.session_state.page,""))
+render_breadcrumb({
+    "Home":        "Dashboard — Live Event",
+    "History":     "History — Flood Events Archive",
+    "Performance": "Performance — System Metrics",
+    "Export":      "Export — Data & Reports",
+}.get(st.session_state.page, ""))
+
 page = st.session_state.page
 if   page == "Home":        page_home()
 elif page == "History":     page_history()
 elif page == "Performance": page_performance()
 elif page == "Export":      page_export()
+elif page == "Admin":
+    _sw_user = st.session_state.get("sw_auth", {})
+    if _sw_user.get("role") != "Admin":
+        st.error("Access denied — Admin role required.")
+    else:
+        st.markdown(
+            f"<h2 style='font-family:Barlow Condensed,sans-serif;"
+            f"font-size:28px;font-weight:700;color:{s.FG};"
+            f"margin-bottom:20px;'>Admin Panel</h2>",
+            unsafe_allow_html=True)
+        tab_users, tab_settings = st.tabs(["Users", "Settings"])
+        with tab_users:
+            st.markdown(
+                f"<div style='font-size:13px;color:{s.MUTED};"
+                f"margin-bottom:16px;'>Active accounts</div>",
+                unsafe_allow_html=True)
+            for _em, _ud in DEMO_USERS.items():
+                _rc = s.ACCENT if _ud["role"] == "Admin" else s.SUCCESS
+                st.markdown(
+                    f"<div style='background:{s.CARD};border:1px solid "
+                    f"{s.BORDER};border-radius:8px;padding:12px 16px;"
+                    f"margin-bottom:8px;display:flex;justify-content:"
+                    f"space-between;align-items:center;'>"
+                    f"<div><div style='font-size:14px;font-weight:500;"
+                    f"color:{s.FG};'>{_ud['name']}</div>"
+                    f"<div style='font-size:12px;color:{s.MUTED};'>{_em}"
+                    f"</div></div>"
+                    f"<span style='font-size:11px;padding:3px 10px;"
+                    f"border-radius:20px;background:rgba(14,165,233,.1);"
+                    f"color:{_rc};font-weight:600;'>{_ud['role']}</span>"
+                    f"</div>",
+                    unsafe_allow_html=True)
+        with tab_settings:
+            st.info("System settings — coming soon.")
