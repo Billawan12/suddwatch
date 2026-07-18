@@ -12,7 +12,6 @@ import plotly.graph_objects as go
 sys.path.insert(0, str(Path(__file__).parent))
 import db
 import styles as s
-st.sidebar.write("checkpoint 1: imports OK")
 
 # ── Dynamic theme patcher ─────────────────────────────────────────────────
 # Patches the static styles module constants based on user theme preference.
@@ -281,7 +280,6 @@ st.set_page_config(page_title="SuddWatch", layout="wide",
 # ── Init database ─────────────────────────────────────────────
 db.init_db()
 
-st.sidebar.write("checkpoint 2: constants OK")
 # ── Cached DB accessors — TTL 60s so data stays fresh ─────────────────────
 @st.cache_data(ttl=60, show_spinner=False)
 def _cached_active_event():       return db.get_active_event() or {}
@@ -3182,7 +3180,6 @@ def render_intelligence_feed():
 # ════════════════════════════════════════════════════════════
 # MAIN
 # ════════════════════════════════════════════════════════════
-st.sidebar.write("checkpoint 3: functions OK — MAIN reached")
 
 for _k, _v in {
     "page": "Home", "hist_state": "All",
@@ -3248,21 +3245,14 @@ if not st.session_state.get("sw_auth"):
 
     st.stop()
 
-st.write("A: after auth gate")
 st.markdown(s.GLOBAL_CSS, unsafe_allow_html=True)
-st.write("B: GLOBAL_CSS ok")
 render_sidebar()
-st.write("C: render_sidebar ok")
 event = _cached_active_event()
-st.write("D: db ok")
 last_evt = event.get("date_utc", "—") if event else "—"
 render_topbar(last_evt)
-st.write("E: topbar ok")
 render_breadcrumb({"Home":"Home"}.get(st.session_state.page,""))
-st.write("F: breadcrumb ok")
 page = st.session_state.page
 if   page == "Home":        page_home()
 elif page == "History":     page_history()
 elif page == "Performance": page_performance()
 elif page == "Export":      page_export()
-st.write("G: done")
