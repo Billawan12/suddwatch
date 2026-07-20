@@ -16,319 +16,10 @@ import styles as s
 # ── Dynamic theme patcher ─────────────────────────────────────────────────
 # Patches the static styles module constants based on user theme preference.
 # Called once per rerun in MAIN before any page renders.
-_LIGHT = {
-    "BG":       "#f6f8fa",
-    "CARD":     "#ffffff",
-    "MUTED_BG": "#f0f2f5",
-    "BORDER":   "#d0d7de",
-    "FG":       "#24292f",
-    "MUTED":    "#57606a",
-    "PRIMARY":  "#0969da",
-    "ACCENT":   "#0969da",
-    "GLOBAL_CSS": "",  # patched separately
-}
-_DARK = {
-    "BG":       "#0d1117",
-    "CARD":     "#161b22",
-    "MUTED_BG": "#1c2128",
-    "BORDER":   "#21262d",
-    "FG":       "#c9d1d9",
-    "MUTED":    "#8b949e",
-    "PRIMARY":  "#0ea5e9",
-    "ACCENT":   "#0ea5e9",
-}
 
 # Store original dark GLOBAL_CSS so we can always regenerate from it
-_ORIGINAL_GLOBAL_CSS = None
 
-def apply_theme():
-    """Patch styles.* constants to match current theme. Inject GLOBAL_CSS."""
-    global _ORIGINAL_GLOBAL_CSS
 
-    # Capture the original dark CSS once on first run
-    if _ORIGINAL_GLOBAL_CSS is None:
-        _ORIGINAL_GLOBAL_CSS = s.GLOBAL_CSS
-
-    choice = st.session_state.get("theme_choice", "dark")
-
-    if choice == "light":
-        for k, v in _LIGHT.items():
-            if k != "GLOBAL_CSS":
-                setattr(s, k, v)
-        # Build light CSS fresh from the stored dark original
-        light_css = (_ORIGINAL_GLOBAL_CSS
-            .replace("#0d1117", "#f6f8fa")   # bg
-            .replace("#161b22", "#ffffff")   # card
-            .replace("#1c2128", "#f0f2f5")   # muted_bg
-            .replace("#21262d", "#d0d7de")   # border
-            .replace("#30363d", "#c8d0d9")   # border2
-            .replace("#c9d1d9", "#24292f")   # text
-            .replace("#f0f6fc", "#1c2128")   # text_h
-            .replace("#8b949e", "#57606a")   # text_m
-            .replace("#010409", "#f0f2f5")   # sidebar bg
-        )
-        # Inject additional light-mode overrides
-        light_css += """
-<style>
-/* ═══════════════════════════════════════════════════════════
-   LIGHT MODE — COMPLETE OVERRIDE
-   All text must be dark. All backgrounds must be light.
-   ═══════════════════════════════════════════════════════════ */
-
-/* Page and app backgrounds */
-html, body,
-[data-testid="stApp"],
-[data-testid="stAppViewContainer"],
-[data-testid="stMainBlockContainer"],
-.main, .block-container { background: #f6f8fa !important; }
-
-/* ── Text — targeted, not nuclear ──────────────────────────── */
-/* Main content text */
-[data-testid="stMarkdownContainer"] p,
-[data-testid="stMarkdownContainer"] h1,
-[data-testid="stMarkdownContainer"] h2,
-[data-testid="stMarkdownContainer"] h3,
-[data-testid="stMarkdownContainer"] h4,
-[data-testid="stMarkdownContainer"] h5,
-[data-testid="stMarkdownContainer"] h6,
-[data-testid="stMarkdownContainer"] li,
-[data-testid="stMarkdownContainer"] td,
-[data-testid="stMarkdownContainer"] th,
-[data-testid="stMarkdownContainer"] blockquote,
-[data-testid="stMarkdownContainer"] code { color: #24292f !important; }
-
-/* Muted/secondary text */
-[data-testid="stMarkdownContainer"] small,
-[data-testid="stCaptionContainer"],
-.stCaption { color: #57606a !important; }
-
-/* Metric values */
-[data-testid="stMetricValue"] { color: #24292f !important; }
-[data-testid="stMetricDelta"] { color: #24292f !important; }
-[data-testid="stMetricLabel"] { color: #57606a !important; }
-
-/* Headers */
-[data-testid="stHeading"] { color: #1c2128 !important; }
-
-/* Label text on widgets */
-[data-testid="stWidgetLabel"] { color: #24292f !important; }
-[data-testid="stText"] { color: #24292f !important; }
-
-/* st.write() and st.text() output */
-[data-testid="stMarkdownContainer"] span:not([style*="color:"]) { color: #24292f !important; }
-
-/* Sidebar */
-[data-testid="stSidebar"] {
-    background: #f0f2f5 !important;
-    border-right: 1px solid #d0d7de !important;
-}
-[data-testid="stSidebar"] p,
-[data-testid="stSidebar"] span:not([style*="color:#0"]):not([style*="color:#2"]):not([style*="color:#e"]):not([style*="color:#f"]),
-[data-testid="stSidebar"] div:not([style]) {
-    color: #24292f !important;
-}
-[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p { color: #24292f !important; }
-[data-testid="stSidebar"] button {
-    background: #f0f2f5 !important;
-    color: #24292f !important;
-    border: 1px solid #d0d7de !important;
-}
-[data-testid="stSidebar"] button:hover {
-    background: #ffffff !important;
-    border-color: #0969da !important;
-    color: #0969da !important;
-}
-
-/* Buttons */
-[data-testid="stButton"] button {
-    background: #ffffff !important;
-    color: #24292f !important;
-    border: 1px solid #d0d7de !important;
-}
-[data-testid="stButton"] button:hover {
-    background: #f0f2f5 !important;
-    border-color: #0969da !important;
-    color: #0969da !important;
-}
-[data-testid="stButton"] button[kind="primary"],
-[data-testid="stFormSubmitButton"] button {
-    background: #0969da !important;
-    color: #ffffff !important;
-    border: none !important;
-}
-[data-testid="stButton"] button[kind="primary"]:hover {
-    background: #0550ae !important;
-    color: #ffffff !important;
-}
-
-/* Tabs */
-[data-testid="stTabs"] [data-baseweb="tab-list"] {
-    background: #f0f2f5 !important;
-    border-bottom: 2px solid #d0d7de !important;
-}
-button[data-baseweb="tab"] {
-    background: transparent !important;
-    color: #57606a !important;
-}
-button[data-baseweb="tab"][aria-selected="true"] {
-    color: #0969da !important;
-    border-bottom-color: #0969da !important;
-}
-[data-testid="stTabPanel"] { background: #f6f8fa !important; }
-
-/* Inputs and forms */
-input, textarea, [data-baseweb="input"] input,
-[data-baseweb="textarea"] textarea {
-    background: #ffffff !important;
-    color: #24292f !important;
-    border: 1px solid #d0d7de !important;
-}
-input::placeholder, textarea::placeholder { color: #8c959f !important; }
-[data-testid="stTextInput"] label,
-[data-testid="stSelectbox"] label,
-[data-testid="stSlider"] label,
-[data-testid="stRadio"] label,
-[data-testid="stCheckbox"] label { color: #24292f !important; }
-
-/* Selectbox / dropdowns */
-[data-testid="stSelectbox"] > div > div,
-[data-baseweb="select"] > div {
-    background: #ffffff !important;
-    border: 1px solid #d0d7de !important;
-    color: #24292f !important;
-}
-[data-baseweb="popover"] [role="option"],
-[data-baseweb="menu"] li {
-    background: #ffffff !important;
-    color: #24292f !important;
-}
-[data-baseweb="popover"] [role="option"]:hover {
-    background: #f0f2f5 !important;
-}
-
-/* Slider */
-[data-testid="stSlider"] div[role="slider"] {
-    background: #0969da !important;
-}
-[data-testid="stSlider"] .css-1inwz65,
-[data-testid="stSlider"] [class*="StyledThumb"] {
-    background: #0969da !important;
-}
-
-/* Alerts and info boxes */
-[data-testid="stAlert"] {
-    background: #f0f2f5 !important;
-    border: 1px solid #d0d7de !important;
-    color: #24292f !important;
-}
-[data-testid="stAlert"] * { color: #24292f !important; }
-
-/* Expanders */
-[data-testid="stExpander"] {
-    background: #ffffff !important;
-    border: 1px solid #d0d7de !important;
-}
-[data-testid="stExpander"] summary { color: #24292f !important; }
-[data-testid="stExpander"] summary:hover { color: #0969da !important; }
-
-/* Tables */
-[data-testid="stTable"] table { background: #ffffff !important; }
-[data-testid="stTable"] th { background: #f0f2f5 !important; color: #24292f !important; }
-[data-testid="stTable"] td { color: #24292f !important; border-color: #d0d7de !important; }
-
-/* Dataframe */
-[data-testid="stDataFrame"] { background: #ffffff !important; }
-
-/* Download button */
-[data-testid="stDownloadButton"] button {
-    background: #f0f2f5 !important;
-    color: #24292f !important;
-    border: 1px solid #d0d7de !important;
-}
-
-/* Dividers */
-hr { border-color: #d0d7de !important; }
-
-/* Plotly charts — backgrounds */
-.js-plotly-plot .plotly .bg { fill: #ffffff !important; }
-.js-plotly-plot .plotly .gridlayer path { stroke: #d0d7de !important; }
-.js-plotly-plot .plotly .xtick text,
-.js-plotly-plot .plotly .ytick text { fill: #24292f !important; }
-
-/* Folium map frame */
-iframe { border: 1px solid #d0d7de !important; border-radius: 8px !important; }
-
-/* Spinner */
-[data-testid="stSpinner"] { color: #24292f !important; }
-
-/* Scrollbar (webkit) */
-::-webkit-scrollbar { background: #f0f2f5 !important; }
-::-webkit-scrollbar-thumb { background: #d0d7de !important; border-radius: 4px; }
-
-</style>"""
-        s.GLOBAL_CSS = light_css
-    else:
-        # Restore original dark values
-        for k, v in _DARK.items():
-            setattr(s, k, v)
-        s.GLOBAL_CSS = _ORIGINAL_GLOBAL_CSS
-
-# ── Page config ───────────────────────────────────────────────
-st.set_page_config(page_title="SuddWatch", layout="wide",
-                   initial_sidebar_state="expanded", page_icon="🌊")
-
-# Kill Streamlit fade/transition on every rerun
-st.markdown("""<style>
-*,*::before,*::after{
-    -webkit-transition:none!important;
-    transition:none!important;
-    -webkit-animation:none!important;
-    animation:none!important;}
-[data-testid="stStatusWidget"],
-div[class*="StatusWidget"]{display:none!important;}
-</style>
-<script>
-// Kill Streamlit's JS-driven fade overlay
-(function killFade(){
-    var style = document.createElement('style');
-    style.textContent = '* { transition: none !important; animation: none !important; }';
-    document.head.appendChild(style);
-
-    // Override requestAnimationFrame to prevent fade animations
-    var _raf = window.requestAnimationFrame;
-    window.requestAnimationFrame = function(cb) {
-        return _raf(function(t) {
-            // Remove any opacity < 1 Streamlit sets during rerun
-            var app = document.querySelector('[data-testid="stApp"]');
-            if (app) app.style.opacity = '1';
-            cb(t);
-        });
-    };
-
-    // Watch for Streamlit's overlay and remove it instantly
-    var observer = new MutationObserver(function(mutations) {
-        mutations.forEach(function(m) {
-            m.addedNodes.forEach(function(node) {
-                if (node.nodeType === 1) {
-                    // Kill any element Streamlit uses for the fade
-                    var app = document.querySelector('[data-testid="stApp"]');
-                    if (app) {
-                        app.style.opacity = '1';
-                        app.style.transition = 'none';
-                    }
-                }
-            });
-        });
-    });
-    observer.observe(document.body, {childList: true, subtree: true});
-})();
-</script>""", unsafe_allow_html=True)
-
-# ── Init database ─────────────────────────────────────────────
-db.init_db()
-
-# ── Cached DB accessors — TTL 60s so data stays fresh ─────────────────────
-@st.cache_data(ttl=60, show_spinner=False)
 def _cached_active_event():       return db.get_active_event() or {}
 @st.cache_data(ttl=60, show_spinner=False)
 def _cached_villages(evt_id):     return db.get_villages(evt_id)
@@ -377,34 +68,7 @@ for k, v in _defaults.items():
 # AUTH LAYER — Landing page, sign-in, access requests
 # ════════════════════════════════════════════════════════════
 
-THEMES = {
-    "dark": {
-        "bg":       "#0d1117", "card":    "#161b22", "card2":   "#111927",
-        "sidebar":  "#010409", "border":  "#21262d", "border2": "#30363d",
-        "text":     "#c9d1d9", "text_h":  "#f0f6fc", "text_m":  "#8b949e",
-        "accent":   "#0ea5e9", "accent2": "#0284c7",
-        "success":  "#22c55e", "warning": "#f59e0b", "danger":  "#ef4444",
-        "purple":   "#a855f7", "teal":    "#14b8a6",
-        "plot_bg":  "#161b22", "plot_paper": "#0d1117",
-        "input_bg": "#161b22", "topbar":  "#010409",
-        "map_tile": "CartoDB dark_matter",
-    },
-    "light": {
-        "bg":       "#f6f8fa", "card":    "#ffffff", "card2":   "#f0f2f5",
-        "sidebar":  "#f0f2f5", "border":  "#d0d7de", "border2": "#b8c0cc",
-        "text":     "#24292f", "text_h":  "#1c2128", "text_m":  "#57606a",
-        "accent":   "#0969da", "accent2": "#0550ae",
-        "success":  "#1a7f37", "warning": "#9a6700", "danger":  "#cf222e",
-        "purple":   "#6639ba", "teal":    "#0f766e",
-        "plot_bg":  "#ffffff", "plot_paper": "#f6f8fa",
-        "input_bg": "#ffffff", "topbar":  "#f0f2f5",
-        "map_tile": "OpenStreetMap",
-    },
-}
 
-def get_theme():
-    choice = st.session_state.get("theme_choice", "dark")
-    return THEMES.get(choice if choice != "auto" else "dark", THEMES["dark"])
 
 def css(t):
     return f"""<style>
@@ -656,160 +320,7 @@ DEMO_USERS = {
 }
 
 # ── Auth database (separate from pipeline DB) ─────────────────────────────
-AUTH_DB  = Path(__file__).parent / "auth.db"
 
-def _hash(pw: str) -> str:
-    return hashlib.sha256(pw.encode()).hexdigest()
-
-def init_auth_db():
-    """Create users and access_requests tables; seed demo accounts."""
-    con = sqlite3.connect(AUTH_DB)
-    cur = con.cursor()
-    cur.executescript("""
-        CREATE TABLE IF NOT EXISTS users (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            email       TEXT    UNIQUE NOT NULL,
-            name        TEXT    NOT NULL,
-            role        TEXT    NOT NULL DEFAULT 'User',
-            pw_hash     TEXT    NOT NULL,
-            active      INTEGER NOT NULL DEFAULT 1,
-            created_at  TEXT    DEFAULT (datetime('now'))
-        );
-        CREATE TABLE IF NOT EXISTS access_requests (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            name        TEXT NOT NULL,
-            org         TEXT NOT NULL,
-            email       TEXT NOT NULL,
-            role        TEXT NOT NULL DEFAULT 'User',
-            pw_hash     TEXT NOT NULL,
-            status      TEXT NOT NULL DEFAULT 'pending',
-            submitted_at TEXT DEFAULT (datetime('now'))
-        );
-    """)
-    # Seed/update demo users — always ensure correct password hash
-    for email, d in DEMO_USERS.items():
-        cur.execute(
-            "INSERT OR IGNORE INTO users (email, name, role, pw_hash) VALUES (?,?,?,?)",
-            (email, d["name"], d["role"], _hash(d["password"]))
-        )
-        # Always update hash in case it changed (e.g. hashing algorithm changed)
-        cur.execute(
-            "UPDATE users SET pw_hash=?, active=1 WHERE email=?",
-            (_hash(d["password"]), email)
-        )
-    con.commit()
-    con.close()
-
-def auth_login(email: str, password: str):
-    """Return user dict on success, None on failure."""
-    em = email.strip().lower()
-    # 1. Check demo accounts directly (always works, no DB needed)
-    demo = DEMO_USERS.get(em)
-    if demo and demo["password"] == password:
-        return {"email": em, "name": demo["name"], "role": demo["role"]}
-    # 2. Check auth.db for registered users
-    try:
-        con = sqlite3.connect(AUTH_DB)
-        row = con.execute(
-            "SELECT name, role FROM users WHERE lower(email)=? AND pw_hash=? AND active=1",
-            (em, _hash(password))
-        ).fetchone()
-        con.close()
-        if row:
-            return {"email": em, "name": row[0], "role": row[1]}
-    except Exception:
-        pass
-    return None
-
-def auth_login_by_email(email: str):
-    """Restore user from email alone (used for URL-based session restore)."""
-    import sqlite3 as _sq
-    try:
-        con = _sq.connect(AUTH_DB)
-        row = con.execute(
-            "SELECT name, role FROM users WHERE email=? AND active=1",
-            (email.strip().lower(),)
-        ).fetchone()
-        con.close()
-        if row:
-            return {"email": email.strip().lower(), "name": row[0], "role": row[1]}
-    except Exception:
-        pass
-    return None
-
-def auth_request(name: str, org: str, email: str, role: str, password: str):
-    """Submit an access request. Returns (ok, message)."""
-    con = sqlite3.connect(AUTH_DB)
-    # Check no existing user or pending request
-    existing = con.execute(
-        "SELECT 1 FROM users WHERE email=?", (email.strip().lower(),)
-    ).fetchone()
-    pending = con.execute(
-        "SELECT 1 FROM access_requests WHERE email=? AND status='pending'",
-        (email.strip().lower(),)
-    ).fetchone()
-    if existing:
-        con.close()
-        return False, "An account with that email already exists."
-    if pending:
-        con.close()
-        return False, "A request for that email is already pending approval."
-    con.execute(
-        "INSERT INTO access_requests (name, org, email, role, pw_hash) VALUES (?,?,?,?,?)",
-        (name, org, email.strip().lower(), role, _hash(password))
-    )
-    con.commit()
-    con.close()
-    return True, f"Request submitted for {name} ({org}). An administrator will activate your account within 24 hours."
-
-def auth_get_requests():
-    """Return all pending access requests."""
-    con = sqlite3.connect(AUTH_DB)
-    rows = con.execute(
-        "SELECT id, name, org, email, role, submitted_at FROM access_requests WHERE status='pending' ORDER BY submitted_at DESC"
-    ).fetchall()
-    con.close()
-    return rows
-
-def auth_approve(req_id: int):
-    """Approve a request — create user account and mark request approved."""
-    con = sqlite3.connect(AUTH_DB)
-    row = con.execute(
-        "SELECT name, email, role, pw_hash FROM access_requests WHERE id=?", (req_id,)
-    ).fetchone()
-    if row:
-        name, email, role, pw_hash = row
-        con.execute(
-            "INSERT OR IGNORE INTO users (email, name, role, pw_hash) VALUES (?,?,?,?)",
-            (email, name, role, pw_hash)
-        )
-        con.execute(
-            "UPDATE access_requests SET status='approved' WHERE id=?", (req_id,)
-        )
-        con.commit()
-    con.close()
-
-def auth_reject(req_id: int):
-    """Reject a request."""
-    con = sqlite3.connect(AUTH_DB)
-    con.execute("UPDATE access_requests SET status='rejected' WHERE id=?", (req_id,))
-    con.commit()
-    con.close()
-
-def auth_get_users():
-    """Return all active users."""
-    con = sqlite3.connect(AUTH_DB)
-    rows = con.execute(
-        "SELECT email, name, role, created_at FROM users WHERE active=1 ORDER BY role DESC, name"
-    ).fetchall()
-    con.close()
-    return rows
-
-def is_logged_in():  return st.session_state.get("logged_in", False)
-def current_user():  return st.session_state.get("user", {})
-def logout():
-    for k in ["logged_in","user","auth_page"]:
-        st.session_state.pop(k, None)
 
 def page_landing(t):
     """Show landing.html as a proper iframe — no sandbox, buttons work."""
@@ -916,197 +427,7 @@ window.addEventListener('load', function() {
     components.html(html, height=900, scrolling=True)
 
 
-def page_auth(t):
-    ac=t['accent']; bg=t['bg']; ca=t['card']; ca2=t['card2']
-    bo=t['border']; b2=t['border2']; th=t['text_h']; tm=t['text_m']
-    da=t['danger']; su=t['success']
 
-    # Full-page background
-    st.markdown(f"""<style>
-[data-testid="stApp"]{{background:{bg}!important;}}
-[data-testid="stMainBlockContainer"],.block-container{{
-  padding:0!important;margin:0!important;max-width:100%!important;}}
-section[data-testid="stMain"]{{padding:0!important;}}
-[data-testid="stSidebar"]{{display:none!important;}}
-#MainMenu,footer,header,[data-testid="stToolbar"],
-[data-testid="stDecoration"],[data-testid="stStatusWidget"],
-[data-testid="stBottom"],[data-testid="stBottomBlockContainer"]{{
-  display:none!important;}}
-/* Tab styling */
-[data-testid="stTabs"] [data-testid="stMarkdownContainer"] p{{margin:0;}}
-button[data-baseweb="tab"]{{
-  font-family:'Inter',sans-serif!important;
-  font-size:15px!important;font-weight:500!important;
-  color:{tm}!important;padding:12px 24px!important;
-  border-bottom:2px solid transparent!important;background:none!important;}}
-button[data-baseweb="tab"][aria-selected="true"]{{
-  color:{ac}!important;border-bottom:2px solid {ac}!important;}}
-[data-testid="stTabPanel"]{{padding:24px 0 0!important;}}
-/* Input fields */
-[data-testid="stTextInput"] input{{
-  background:{ca2}!important;border:1px solid {b2}!important;
-  border-radius:8px!important;color:{th}!important;
-  font-size:15px!important;padding:10px 14px!important;}}
-[data-testid="stTextInput"] input:focus{{
-  border-color:{ac}!important;box-shadow:0 0 0 3px rgba(14,165,233,.12)!important;}}
-[data-testid="stTextInput"] label{{
-  color:{tm}!important;font-size:14px!important;font-weight:500!important;
-  margin-bottom:6px!important;}}
-/* Select/radio */
-[data-testid="stSelectbox"] > div > div{{
-  background:{ca2}!important;border:1px solid {b2}!important;
-  border-radius:8px!important;color:{th}!important;}}
-[data-testid="stRadio"] label{{color:{tm}!important;font-size:14px!important;}}
-/* Primary button */
-[data-testid="stButton"] button[kind="primary"]{{
-  background:{ac}!important;border:none!important;border-radius:8px!important;
-  font-size:15px!important;font-weight:600!important;
-  padding:12px 0!important;letter-spacing:.01em!important;}}
-[data-testid="stButton"] button[kind="primary"]:hover{{opacity:.88!important;}}
-/* Secondary button */
-[data-testid="stButton"] button[kind="secondary"]{{
-  background:none!important;border:1px solid {b2}!important;
-  border-radius:8px!important;color:{tm}!important;
-  font-size:14px!important;padding:10px 0!important;}}
-[data-testid="stButton"] button[kind="secondary"]:hover{{
-  border-color:{ac}!important;color:{ac}!important;}}
-/* Form submit button */
-[data-testid="stFormSubmitButton"] button{{
-  background:{ac}!important;border:none!important;border-radius:8px!important;
-  font-size:15px!important;font-weight:600!important;
-  padding:12px 0!important;width:100%!important;}}
-[data-testid="stFormSubmitButton"] button:hover{{opacity:.88!important;}}
-/* Error/success */
-[data-testid="stAlert"]{{border-radius:8px!important;font-size:14px!important;}}
-</style>""", unsafe_allow_html=True)
-
-    # Centred layout
-    _, mid, _ = st.columns([1, 1.6, 1])
-    with mid:
-        st.markdown("<div style='height:48px;'></div>", unsafe_allow_html=True)
-
-        # Logo
-        st.markdown(f"""
-<div style='text-align:center;margin-bottom:32px;'>
-  <div style='display:inline-flex;align-items:center;gap:10px;margin-bottom:8px;'>
-    <svg width='32' height='32' viewBox='0 0 28 28' fill='none'>
-      <path d='M14 4C14 4 8 11 8 16C8 19.3 10.7 22 14 22C17.3 22 20 19.3 20 16C20 11 14 4 14 4Z'
-        fill='{ac}' opacity='.9'/>
-      <path d='M3 23Q7 19.5 11 23Q15 26.5 19 23Q23 19.5 27 23'
-        fill='none' stroke='{ac}' stroke-width='1.6' stroke-linecap='round' opacity='.6'/>
-    </svg>
-    <span style='font-family:Barlow Condensed,sans-serif;font-size:28px;
-      font-weight:800;color:{th};letter-spacing:.08em;'>SUDDWATCH</span>
-  </div>
-  <div style='font-size:14px;color:{tm};letter-spacing:.02em;'>
-    Flood Detection &amp; Alert System &mdash; Greater Upper Nile
-  </div>
-</div>""", unsafe_allow_html=True)
-
-        # Card
-        st.markdown(f"""<div style='background:{ca};border:1px solid {bo};
-border-radius:14px;padding:32px 28px;'>""", unsafe_allow_html=True)
-
-        tab_in, tab_up = st.tabs(["Sign In", "Request Access"])
-
-        # ── SIGN IN ──────────────────────────────────────────────
-        with tab_in:
-            st.markdown(f"<p style='font-size:14px;color:{tm};margin-bottom:20px;'>"
-                        "Enter your credentials to access the operational dashboard.</p>",
-                        unsafe_allow_html=True)
-
-            # st.form prevents reruns on every keystroke
-            with st.form("signin_form", clear_on_submit=False):
-                email    = st.text_input("Email address",
-                    placeholder="you@organisation.org", key="li_email")
-                password = st.text_input("Password", type="password",
-                    placeholder="Your password", key="li_pw")
-                submitted = st.form_submit_button("Sign in",
-                    use_container_width=True)
-
-            if submitted:
-                user = auth_login(email, password)
-                if user:
-                    st.session_state["logged_in"] = True
-                    st.session_state["user"] = user
-                    st.session_state.pop("auth_page", None)
-                    st.rerun()
-                else:
-                    st.error("Incorrect email or password.")
-
-            # Demo credentials box
-            st.markdown(f"""
-<div style='margin-top:20px;padding:14px 16px;background:{bg};
-  border:1px solid {bo};border-radius:8px;'>
-  <div style='font-size:12px;font-family:DM Mono,monospace;
-    color:{tm};letter-spacing:.06em;text-transform:uppercase;
-    margin-bottom:10px;'>Demo accounts</div>
-  <div style='font-size:13px;color:{tm};line-height:2;'>
-    <span style='color:{th};font-weight:500;'>Admin</span>
-    &nbsp;&nbsp;<code style='background:{ca2};padding:2px 7px;
-    border-radius:4px;font-size:12px;'>admin@suddwatch.org</code>
-    &nbsp;<code style='background:{ca2};padding:2px 7px;
-    border-radius:4px;font-size:12px;'>admin123</code><br>
-    <span style='color:{th};font-weight:500;'>User</span>
-    &nbsp;&nbsp;&nbsp;&nbsp;<code style='background:{ca2};padding:2px 7px;
-    border-radius:4px;font-size:12px;'>coord@ocha.org</code>
-    &nbsp;<code style='background:{ca2};padding:2px 7px;
-    border-radius:4px;font-size:12px;'>ocha2025</code>
-  </div>
-</div>""", unsafe_allow_html=True)
-
-        # ── REQUEST ACCESS ────────────────────────────────────────
-        with tab_up:
-            st.markdown(f"<p style='font-size:14px;color:{tm};margin-bottom:20px;'>"
-                        "New accounts are reviewed by an administrator before activation.</p>",
-                        unsafe_allow_html=True)
-
-            with st.form("signup_form", clear_on_submit=False):
-                new_name  = st.text_input("Full name",
-                    placeholder="Dr. Jane Doe", key="ru_name")
-                new_org   = st.text_input("Organisation",
-                    placeholder="UN OCHA / IFRC / MSF / REACH", key="ru_org")
-                new_email = st.text_input("Work email",
-                    placeholder="you@organisation.org", key="ru_email")
-                new_role  = st.selectbox("Access level",
-                    ["User — View operational data",
-                     "Admin — Full system access"], key="ru_role")
-                new_pw    = st.text_input("Password", type="password",
-                    key="ru_pw")
-                new_pw2   = st.text_input("Confirm password", type="password",
-                    key="ru_pw2")
-                submitted_up = st.form_submit_button("Submit request",
-                    use_container_width=True)
-
-            if submitted_up:
-                if not all([new_name, new_org, new_email, new_pw]):
-                    st.error("Please complete all required fields.")
-                elif new_pw != new_pw2:
-                    st.error("Passwords do not match.")
-                elif "@" not in new_email:
-                    st.error("Please enter a valid email address.")
-                else:
-                    ok, msg = auth_request(new_name, new_org, new_email, new_role, new_pw)
-                    if ok:
-                        st.success(msg)
-                    else:
-                        st.error(msg)
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        # Back link
-        st.markdown("<div style='height:16px;'></div>", unsafe_allow_html=True)
-        if st.button("Back to home", key="btn_back",
-                     use_container_width=True, type="secondary"):
-            st.session_state.pop("auth_page", None)
-            st.rerun()
-
-        st.markdown("<div style='height:48px;'></div>", unsafe_allow_html=True)
-
-
-
-
-# ── Plotly layout helper ──────────────────────────────────────
 def _fig(h=220, **overrides):
     layout = dict(
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor=s.CARD,
@@ -1369,60 +690,70 @@ def render_sidebar():
 # TOPBAR
 # ════════════════════════════════════════════════════════════
 def render_topbar(last_evt: str):
-    cl, cr = st.columns([4, 1])
-    with cl:
+    cur_theme = st.session_state.get("theme_choice", "dark")
+    mode_icon = "☀" if cur_theme == "dark" else "☾"
+    mode_tip  = "Light mode" if cur_theme == "dark" else "Dark mode"
+
+    left, right = st.columns([5, 1])
+    with left:
         st.markdown(f"""
 <div style="height:60px;display:flex;align-items:center;gap:12px;
   border-bottom:1px solid {s.BORDER};">
   <svg width="22" height="22" viewBox="0 0 28 28" fill="none">
-    <path d="M14 4C14 4 8 11 8 16C8 19.3 10.7 22 14 22C17.3 22 20 19.3 20 16C20 11 14 4 14 4Z"
-      fill="{s.ACCENT}" opacity=".9"/>
+    <path d="M14 4C14 4 8 11 8 16C8 19.3 10.7 22 14 22
+             C17.3 22 20 19.3 20 16C20 11 14 4 14 4Z"
+          fill="{s.ACCENT}" opacity=".9"/>
     <path d="M3 23Q7 19.5 11 23Q15 26.5 19 23Q23 19.5 27 23"
-      fill="none" stroke="{s.ACCENT}" stroke-width="1.6" stroke-linecap="round" opacity=".6"/>
+          fill="none" stroke="{s.ACCENT}" stroke-width="1.6"
+          stroke-linecap="round" opacity=".6"/>
   </svg>
   <span style="font-family:'Barlow Condensed',sans-serif;font-size:20px;
     font-weight:700;color:{s.FG};letter-spacing:.04em;">SUDDWATCH</span>
   <span style="border-left:1px solid {s.BORDER};padding-left:12px;
-    font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED}">
+    font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED};">
     Flood Detection &amp; Alert System &middot; Greater Upper Nile
   </span>
 </div>""", unsafe_allow_html=True)
 
-    with cr:
-        cur_theme = st.session_state.get("theme_choice", "dark")
-        theme_icon = "☀️" if cur_theme == "dark" else "🌙"
-        theme_label = "Light mode" if cur_theme == "dark" else "Dark mode"
-
-        st.markdown(f"""
-<div style="height:60px;display:flex;align-items:center;justify-content:flex-end;
-  gap:8px;border-bottom:1px solid {s.BORDER};padding-right:4px;">
-  <span style="font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED};">
-    Last event: <span style="color:{s.ACCENT};">{last_evt}</span>
-  </span>
-</div>""", unsafe_allow_html=True)
-
-        # Three action buttons: Info | Theme | Refresh
+    with right:
+        st.markdown(
+            f"<div style='height:60px;border-bottom:1px solid {s.BORDER};"
+            f"display:flex;align-items:center;justify-content:flex-end;gap:8px;'>"
+            f"<span style='font-family:DM Mono,monospace;font-size:11px;"
+            f"color:{s.MUTED};'>Last event: "
+            f"<span style='color:{s.ACCENT};'>{last_evt}</span></span>"
+            f"</div>",
+            unsafe_allow_html=True)
         b1, b2, b3 = st.columns(3)
         with b1:
-            if st.button("ⓘ", key="btn_info",
-                         help="Show glossary — plain-language explanations of every technical term",
+            if st.button("ⓘ", key="btn_info", help="Glossary",
                          use_container_width=True):
                 st.session_state["show_glossary"] = not st.session_state.get("show_glossary", False)
+                st.rerun()
         with b2:
-            if st.button(theme_icon, key="btn_theme",
-                         help=theme_label,
+            if st.button(mode_icon, key="btn_theme", help=mode_tip,
                          use_container_width=True):
-                st.session_state["theme_choice"] = "light" if cur_theme == "dark" else "dark"
+                new_theme = "light" if cur_theme == "dark" else "dark"
+                st.session_state["theme_choice"] = new_theme
+                if new_theme == "light":
+                    s.BG="#f6f8fa"; s.CARD="#ffffff"; s.MUTED_BG="#f0f2f5"
+                    s.BORDER="#d0d7de"; s.FG="#24292f"; s.MUTED="#57606a"
+                    s.ACCENT="#0969da"; s.PRIMARY="#0969da"; s.PURPLE="#6639ba"
+                    s.SUCCESS="#1a7f37"; s.WARNING="#9a6700"; s.DANGER="#cf222e"
+                else:
+                    s.BG="#0d1117"; s.CARD="#161b22"; s.MUTED_BG="#1c2128"
+                    s.BORDER="#21262d"; s.FG="#c9d1d9"; s.MUTED="#8b949e"
+                    s.ACCENT="#0ea5e9"; s.PRIMARY="#0ea5e9"; s.PURPLE="#a78bfa"
+                    s.SUCCESS="#22c55e"; s.WARNING="#f59e0b"; s.DANGER="#ef4444"
                 st.rerun()
         with b3:
-            if st.button("⟳", key="btn_refresh",
-                         help="Refresh data now",
+            if st.button("⟳", key="btn_refresh", help="Refresh data",
                          use_container_width=True):
+                st.cache_data.clear()
                 st.rerun()
 
-    # Glossary panel — shown inline below topbar when info button clicked
     if st.session_state.get("show_glossary", False):
-        with st.expander("Glossary — plain-language explanations", expanded=True):
+        with st.expander("Glossary", expanded=True):
             rows = ""
             for k, (short, full) in GLOSSARY.items():
                 rows += (
@@ -1431,14 +762,12 @@ def render_topbar(last_evt: str):
                     f"margin-bottom:4px;'>{k} "
                     f"<span style='font-weight:400;color:{s.MUTED};font-size:13px;'>"
                     f"— {short}</span></div>"
-                    f"<div style='font-size:13px;color:{s.FG};line-height:1.6;'>{full}</div>"
-                    f"</div>"
+                    f"<div style='font-size:13px;color:{s.FG};line-height:1.6;'>"
+                    f"{full}</div></div>"
                 )
             st.markdown(
-                f"<div style='max-height:320px;overflow-y:auto;padding:0 4px;'>"
-                f"{rows}</div>",
-                unsafe_allow_html=True
-            )
+                f"<div style='max-height:320px;overflow-y:auto;'>{rows}</div>",
+                unsafe_allow_html=True)
 
 
 def render_breadcrumb(text: str):
@@ -1582,7 +911,7 @@ def page_home():
     style="width:100%;height:100%;object-fit:cover;object-position:center 55%;
     display:block;filter:brightness(.38);"
     onerror="this.style.display='none'"/>
-  <div style="position:absolute;inset:0;padding:24px 32px;
+  <div class="sw-hero-overlay" style="position:absolute;inset:0;padding:24px 32px;
     display:flex;flex-direction:column;justify-content:space-between;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
       <div style="display:flex;align-items:center;gap:8px;">
@@ -1594,7 +923,7 @@ def page_home():
           Live — {evt_id}</span>
       </div>
       <span style="font-family:DM Mono,monospace;font-size:11px;
-        color:rgba(255,255,255,.5);">Last updated: {_now}</span>
+        color:#ffffff;text-shadow:0 1px 4px rgba(0,0,0,.8);">Last updated: {_now}</span>
     </div>
     <div>
       <div style="font-family:Barlow Condensed,sans-serif;
@@ -1606,19 +935,19 @@ def page_home():
       </div>
       <div style="display:flex;gap:0;flex-wrap:wrap;">
         <span style="font-family:DM Mono,monospace;font-size:11px;
-          color:rgba(255,255,255,.7);background:rgba(0,0,0,.35);
+          color:#ffffff;text-shadow:0 1px 3px rgba(0,0,0,.9);background:rgba(0,0,0,.65);
           padding:5px 14px;border-right:1px solid rgba(255,255,255,.15);">
           Detected: {evt_ts}</span>
         <span style="font-family:DM Mono,monospace;font-size:11px;
-          color:rgba(255,255,255,.7);background:rgba(0,0,0,.35);
+          color:#ffffff;text-shadow:0 1px 3px rgba(0,0,0,.9);background:rgba(0,0,0,.65);
           padding:5px 14px;border-right:1px solid rgba(255,255,255,.15);">
           Alert latency: {evt_lat} min</span>
         <span style="font-family:DM Mono,monospace;font-size:11px;
-          color:rgba(255,255,255,.7);background:rgba(0,0,0,.35);
+          color:#ffffff;text-shadow:0 1px 3px rgba(0,0,0,.9);background:rgba(0,0,0,.65);
           padding:5px 14px;border-right:1px solid rgba(255,255,255,.15);">
           Sentinel-1 IW GRD</span>
         <span style="font-family:DM Mono,monospace;font-size:11px;
-          color:rgba(255,255,255,.7);background:rgba(0,0,0,.35);
+          color:#ffffff;text-shadow:0 1px 3px rgba(0,0,0,.9);background:rgba(0,0,0,.65);
           padding:5px 14px;">
           IoU: {evt_iou}</span>
       </div>
@@ -2900,7 +2229,7 @@ def page_export():
                     f"margin-bottom:4px;'>Preview · {ext}</div>"
                     f"<div style='background:#010409;border:1px solid {s.BORDER};"
                     f"border-radius:4px;padding:8px 10px;font-family:DM Mono,monospace;"
-                    f"font-size:9px;color:{s.MUTED};white-space:pre;line-height:1.6;"
+                    f"font-size:9px;color:#c9d1d9;white-space:pre;line-height:1.6;"
                     f"max-height:100px;overflow:hidden;'>{_preview_txt}</div>"
                     f"</div>",
                     unsafe_allow_html=True,
@@ -3284,17 +2613,26 @@ if not st.session_state.get("sw_auth"):
 #MainMenu,footer,header,[data-testid="stToolbar"],
 [data-testid="stDecoration"],[data-testid="stStatusWidget"],
 [data-testid="stBottom"]{{display:none!important;}}
-html,body,[data-testid="stApp"],[data-testid="stAppViewContainer"],
+html,body,[data-testid="stApp"],[data-testid="stAppViewContainer"]{{
+    background:{s.BG}!important;min-height:100vh!important;
+    width:100vw!important;}}
 [data-testid="stMainBlockContainer"],.block-container{{
     background:{s.BG}!important;}}
+[data-testid="stVerticalBlock"]{{background:{s.BG}!important;}}
 iframe{{display:none!important;}}
 *{{transition:none!important;}}
 </style>""", unsafe_allow_html=True)
 
-        _, mid, _ = st.columns([1, 1.2, 1])
-        with mid:
-            st.markdown("<div style='height:48px'></div>",
-                        unsafe_allow_html=True)
+        # Full-screen centered container — no columns so no shrink on rerun
+        st.markdown(f"""
+<style>
+section[data-testid="stMain"] > div {{min-height:100vh;}}
+[data-testid="stVerticalBlock"] > div:has(> [data-testid="stForm"]) {{
+    max-width:440px;margin:0 auto;padding:60px 0 40px;}}
+</style>""", unsafe_allow_html=True)
+
+        with st.container():
+            st.markdown("<div style='height:0'></div>", unsafe_allow_html=True)
             st.markdown(f"""
 <div style='text-align:center;margin-bottom:28px;'>
   <div style='font-family:Barlow Condensed,sans-serif;font-size:34px;
@@ -3326,9 +2664,9 @@ iframe{{display:none!important;}}
                         st.error("Incorrect email or password.")
 
                 st.markdown(f"""
-<div style='margin-top:14px;padding:12px 14px;background:{s.BG};
+<div style='margin-top:14px;padding:12px 14px;background:{s.CARD};
   border:1px solid {s.BORDER};border-radius:8px;
-  font-size:12px;color:{s.MUTED};'>
+  font-size:12px;color:{s.FG};'>
   <div style='font-family:DM Mono,monospace;font-size:10px;
     text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;'>
     Demo accounts</div>
@@ -3401,6 +2739,109 @@ iframe{{display:none!important;}}
 
 # ── LOGGED IN — DASHBOARD ─────────────────────────────────────
 st.markdown(s.GLOBAL_CSS, unsafe_allow_html=True)
+
+# Light mode override — patches everything GLOBAL_CSS set with dark colours
+if st.session_state.get("theme_choice", "dark") == "light":
+    st.markdown("""<style>
+/* ── App background ── */
+html,body,[data-testid="stApp"],
+[data-testid="stAppViewContainer"],
+[data-testid="stMainBlockContainer"],
+.block-container {
+    background:#f6f8fa!important;color:#24292f!important;}
+
+/* ── Sidebar ── */
+[data-testid="stSidebar"],
+[data-testid="stSidebar"] > div {
+    background:#ffffff!important;
+    border-right:1px solid #d0d7de!important;}
+[data-testid="stSidebar"] * {color:#24292f!important;}
+[data-testid="stSidebar"] button {
+    background:#f0f2f5!important;color:#24292f!important;
+    border-color:#d0d7de!important;}
+[data-testid="stSidebar"] button:hover {
+    background:#d0d7de!important;}
+
+/* ── Keep accent/blue elements BLUE ── */
+[data-testid="stSidebar"] button[kind="primary"],
+.stMarkdown a, a {color:#0969da!important;}
+
+/* ── Cards and containers ── */
+[data-testid="stExpander"],
+[data-testid="stForm"],
+[data-testid="stMetric"],
+div[data-testid="stVerticalBlock"] > div[style*="border"],
+div[style*="background:#161b22"],
+div[style*="background:#1c2128"],
+div[style*="background:#0d1117"] {
+    background:#ffffff!important;
+    border-color:#d0d7de!important;}
+
+/* ── All text dark ── */
+p, span, div, label, h1, h2, h3, h4, h5, li, td, th {
+    color:#24292f!important;}
+/* Hero banner: always white on dark photo */
+.sw-hero-overlay, .sw-hero-overlay * {
+    color:#ffffff!important;}
+/* EXCEPT accent/blue — keep blue */
+[style*="color:#0ea5e9"],
+[style*="color:#0969da"] {color:#0969da!important;}
+/* And success/warning/danger keep their colours */
+[style*="color:#22c55e"],[style*="color:#1a7f37"] {color:#1a7f37!important;}
+[style*="color:#f59e0b"],[style*="color:#9a6700"] {color:#9a6700!important;}
+[style*="color:#ef4444"],[style*="color:#cf222e"] {color:#cf222e!important;}
+
+/* ── Inputs ── */
+input, textarea, select,
+[data-testid="stTextInput"] input,
+[data-testid="stTextArea"] textarea {
+    background:#ffffff!important;color:#24292f!important;
+    border-color:#d0d7de!important;}
+
+/* ── Buttons ── */
+[data-testid="stButton"] button {
+    background:#ffffff!important;color:#24292f!important;
+    border-color:#d0d7de!important;}
+[data-testid="stButton"] button[kind="primary"] {
+    background:#0969da!important;color:#ffffff!important;
+    border-color:#0969da!important;}
+
+/* ── Metrics ── */
+[data-testid="stMetricValue"] {color:#0969da!important;}
+[data-testid="stMetricLabel"] {color:#57606a!important;}
+[data-testid="stMetricDelta"] {color:#1a7f37!important;}
+
+/* ── Tables / dataframes ── */
+[data-testid="stDataFrame"],
+[data-testid="stTable"] {
+    background:#ffffff!important;}
+[data-testid="stDataFrame"] th {
+    background:#f0f2f5!important;color:#24292f!important;}
+
+/* ── Plotly charts ── */
+.js-plotly-plot .plotly .bg {fill:#ffffff!important;}
+.js-plotly-plot .plotly .gridlayer path {stroke:#d0d7de!important;}
+
+/* ── Expander header stays blue ── */
+[data-testid="stExpander"] summary,
+[data-testid="stExpander"] summary span,
+[data-testid="stExpander"] summary p {
+    color:#0969da!important;background:#e8f0fe!important;}
+
+/* ── Code blocks ── */
+code, pre {
+    background:#f0f2f5!important;color:#24292f!important;}
+
+/* ── Dividers ── */
+hr {border-color:#d0d7de!important;}
+
+/* ── Select boxes, dropdowns ── */
+[data-testid="stSelectbox"] > div,
+[data-testid="stMultiSelect"] > div {
+    background:#ffffff!important;color:#24292f!important;
+    border-color:#d0d7de!important;}
+</style>""", unsafe_allow_html=True)
+
 render_sidebar()
 event    = _cached_active_event()
 last_evt = event.get("date_utc", "—") if event else "—"
