@@ -969,23 +969,6 @@ def render_sidebar():
                     st.session_state.export_done = False
                     st.rerun()
 
-        # ── System status ─────────────────────────────────
-        st.markdown(f"""
-<div style="margin-top:20px;padding:14px 16px;border-top:1px solid {s.BORDER};
-  border-bottom:1px solid {s.BORDER};">
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-    <div style="width:7px;height:7px;border-radius:50%;background:{s.SUCCESS};
-      animation:pulse 1.5s ease-in-out infinite;flex-shrink:0;"></div>
-    <span style="font-family:'Inter',sans-serif;font-size:12px;
-      color:{s.MUTED};font-weight:500;">System operational</span>
-  </div>
-  <div style="font-family:'DM Mono',monospace;font-size:10px;
-    color:{s.MUTED};line-height:1.6;">
-    v2.4.1 &middot; Sudd Basin<br>
-    Sentinel-1 &middot; 6-day pass
-  </div>
-</div>""", unsafe_allow_html=True)
-
         # ── Signed-in user ────────────────────────────────
         st.markdown(f"""
 <div style="padding:14px 16px 8px;">
@@ -1017,6 +1000,29 @@ def render_sidebar():
         if st.button("Sign out", key="btn_signout", width='stretch'):
             st.session_state.pop("sw_auth", None)
             st.rerun()
+
+        # ── System status — fixed bottom-left ──
+        st.markdown(f"""
+<style>
+.sw-sys-status {{
+    position:fixed;bottom:16px;left:16px;z-index:9999;
+    padding:10px 14px;border-radius:8px;
+    border:1px solid {s.BORDER};background:{s.CARD};
+    box-shadow:0 2px 8px rgba(0,0,0,.15);}}
+</style>
+<div class="sw-sys-status">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+    <div style="width:7px;height:7px;border-radius:50%;background:{s.SUCCESS};
+      animation:pulse 1.5s ease-in-out infinite;flex-shrink:0;"></div>
+    <span style="font-family:'Inter',sans-serif;font-size:12px;
+      color:{s.MUTED};font-weight:500;">System operational</span>
+  </div>
+  <div style="font-family:'DM Mono',monospace;font-size:10px;
+    color:{s.MUTED};line-height:1.6;">
+    v2.4.1 &middot; Sudd Basin<br>
+    Sentinel-1 &middot; 6-day pass
+  </div>
+</div>""", unsafe_allow_html=True)
 
 
 # ════════════════════════════════════════════════════════════
