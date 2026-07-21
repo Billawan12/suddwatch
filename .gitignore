@@ -29,3 +29,5 @@ models/
 dashboard/suddwatch_dash.db
 data/
 dashboard/auth.db
+.pytest_cache/
+dashboard/test_login.py
