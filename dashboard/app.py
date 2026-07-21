@@ -306,7 +306,7 @@ def render_map(t):
             Health facility at risk</div>
           </div>"""
         m.get_root().html.add_child(folium.Element(legend))
-        st_folium(m, height=680, use_container_width=True, returned_objects=[])
+        st_folium(m, height=680, width='stretch', returned_objects=[])
     else:
         st.info("💡 Install `folium` and `streamlit-folium` for the interactive OpenStreetMap.")
 
@@ -631,7 +631,7 @@ def render_sidebar():
                     f"<span style='color:{s.ACCENT};'>{icon}</span>{pg}</div>",
                     unsafe_allow_html=True)
             else:
-                if st.button(pg, key=f"nav_{pg}", use_container_width=True):
+                if st.button(pg, key=f"nav_{pg}", width='stretch'):
                     st.session_state.page = pg
                     st.session_state.export_done = False
                     st.rerun()
@@ -681,7 +681,7 @@ def render_sidebar():
 </div>""", unsafe_allow_html=True)
 
         # ── Sign out ──────────────────────────────────────
-        if st.button("Sign out", key="btn_signout", use_container_width=True):
+        if st.button("Sign out", key="btn_signout", width='stretch'):
             st.session_state.pop("sw_auth", None)
             st.rerun()
 
@@ -727,12 +727,12 @@ def render_topbar(last_evt: str):
         b1, b2, b3 = st.columns(3)
         with b1:
             if st.button("ⓘ", key="btn_info", help="Glossary",
-                         use_container_width=True):
+                         width='stretch'):
                 st.session_state["show_glossary"] = not st.session_state.get("show_glossary", False)
                 st.rerun()
         with b2:
             if st.button(mode_icon, key="btn_theme", help=mode_tip,
-                         use_container_width=True):
+                         width='stretch'):
                 new_theme = "light" if cur_theme == "dark" else "dark"
                 st.session_state["theme_choice"] = new_theme
                 if new_theme == "light":
@@ -748,7 +748,7 @@ def render_topbar(last_evt: str):
                 st.rerun()
         with b3:
             if st.button("⟳", key="btn_refresh", help="Refresh data",
-                         use_container_width=True):
+                         width='stretch'):
                 st.cache_data.clear()
                 st.rerun()
 
@@ -1211,6 +1211,142 @@ def page_home():
             + f'</thead><tbody>{body}</tbody></table>'
         ), unsafe_allow_html=True)
 
+    st.markdown("<div style='height:32px'></div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='height:1px;background:{s.BORDER};margin-bottom:32px;'></div>",
+                unsafe_allow_html=True)
+
+    # ── Season Overview ───────────────────────────────────────
+    monthly = _cached_season_monthly()
+    season_rows = monthly or []
+
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
+    sc1, sc2 = st.columns([3, 2])
+
+    with sc1:
+        st.markdown(f"""
+<div style="background:{s.CARD};border:1px solid {s.BORDER};
+  border-radius:8px;padding:20px;">
+  <div style="font-family:'DM Mono',monospace;font-size:11px;
+    color:{s.MUTED};text-transform:uppercase;letter-spacing:.06em;
+    margin-bottom:4px;">2025 Flood Season &middot; Monthly Trend</div>
+  <div style="font-size:13px;color:{s.FG};margin-bottom:16px;line-height:1.5;">
+    Flood extent (blue area) and population at risk (red dashed line)
+    across the 2025 rainy season. Each bar represents one satellite
+    acquisition pass over Greater Upper Nile.
+  </div>""",
+            unsafe_allow_html=True)
+
+        if season_rows:
+            import plotly.graph_objects as go
+            months  = [r.get("month","") for r in season_rows]
+            extents = [r.get("flood_ha", 0) for r in season_rows]
+            pops    = [r.get("affected", 0) for r in season_rows]
+
+            fig = go.Figure()
+            # Area fill for flood extent
+            fig.add_trace(go.Scatter(
+                x=months, y=extents, name="Flood extent (ha)",
+                mode="lines+markers",
+                line=dict(color=s.ACCENT, width=2.5),
+                marker=dict(size=6, color=s.ACCENT),
+                fill="tozeroy",
+                fillcolor=f"rgba(14,165,233,0.12)",
+                hovertemplate="%{x}<br><b>%{y:,} ha</b><extra></extra>",
+            ))
+            # Line for people at risk
+            fig.add_trace(go.Scatter(
+                x=months, y=pops, name="People at risk",
+                mode="lines+markers", yaxis="y2",
+                line=dict(color=s.DANGER, width=2, dash="dot"),
+                marker=dict(size=5, color=s.DANGER),
+                hovertemplate="%{x}<br><b>%{y:,} people</b><extra></extra>",
+            ))
+            # Use FG colour so text is dark in light mode, light in dark mode
+            fig.update_layout(
+                height=240,
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color=s.FG, size=11,
+                          family="DM Mono, monospace"),
+                margin=dict(l=8, r=8, t=8, b=8),
+                legend=dict(orientation="h", y=1.18, x=0,
+                            font=dict(size=11, color=s.FG)),
+                xaxis=dict(gridcolor=s.BORDER, showgrid=True,
+                           tickfont=dict(size=10, color=s.FG),
+                           linecolor=s.BORDER),
+                yaxis=dict(gridcolor=s.BORDER, showgrid=True,
+                           tickfont=dict(size=10, color=s.FG),
+                           title=dict(text="Flood extent (ha)",
+                                      font=dict(size=10, color=s.FG)),
+                           linecolor=s.BORDER),
+                yaxis2=dict(overlaying="y", side="right",
+                            showgrid=False,
+                            tickfont=dict(size=10, color=s.DANGER),
+                            title=dict(text="People at risk",
+                                       font=dict(size=10, color=s.DANGER)),
+                            linecolor=s.BORDER),
+                hovermode="x unified",
+                hoverlabel=dict(
+                    bgcolor=s.CARD,
+                    font=dict(color=s.FG, size=11),
+                    bordercolor=s.BORDER,
+                ),
+            )
+            st.plotly_chart(fig, width='stretch',
+                            config={"displayModeBar": False})
+            st.markdown(f"""
+<div style="font-size:11px;color:{s.MUTED};font-family:'DM Mono',monospace;
+  margin-top:4px;">
+  Source: ESA Sentinel-1 SAR detections &middot; Copernicus Data Space
+  &middot; WorldPop 2020 population grid
+</div>""", unsafe_allow_html=True)
+        else:
+            st.caption("No seasonal data available yet.")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with sc2:
+        st.markdown(f"""
+<div style="background:{s.CARD};border:1px solid {s.BORDER};
+  border-radius:8px;padding:20px;height:100%;">
+  <div style="font-family:'DM Mono',monospace;font-size:11px;
+    color:{s.MUTED};text-transform:uppercase;letter-spacing:.06em;
+    margin-bottom:16px;">State Breakdown</div>""",
+            unsafe_allow_html=True)
+
+        if breakdown:
+            for b in breakdown:
+                state  = b.get("state", "—")
+                ha     = b.get("flood_ha", 0)
+                pop    = b.get("affected", 0)
+                pct    = min(100, int(ha / 50))  # bar width
+                st.markdown(f"""
+<div style="margin-bottom:14px;">
+  <div style="display:flex;justify-content:space-between;
+    margin-bottom:4px;">
+    <span style="font-size:13px;font-weight:500;
+      color:{s.FG};">{state}</span>
+    <span style="font-size:12px;color:{s.MUTED};">
+      {ha:,} ha &middot; {pop:,} people</span>
+  </div>
+  <div style="background:{s.BORDER};border-radius:3px;height:5px;">
+    <div style="background:{s.ACCENT};width:{pct}%;
+      height:5px;border-radius:3px;"></div>
+  </div>
+</div>""", unsafe_allow_html=True)
+        else:
+            st.caption("No breakdown data available.")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
+
+    st.markdown("<div style='height:32px'></div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='height:1px;background:{s.BORDER};margin-bottom:32px;'></div>",
+                unsafe_allow_html=True)
+
     # ── Media — Field Evidence & Video ────────────────────────
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
     st.markdown(s.card_wrap(
@@ -1274,6 +1410,10 @@ def page_home():
                 unsafe_allow_html=True
             )
 
+    st.markdown("<div style='height:32px'></div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='height:1px;background:{s.BORDER};margin-bottom:32px;'></div>",
+                unsafe_allow_html=True)
+
     # ── Intelligence Feed ─────────────────────────────────────
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
     render_intelligence_feed()
@@ -1282,8 +1422,9 @@ def page_home():
 # ════════════════════════════════════════════════════════════
 # PAGE — HISTORY
 def page_history():
-    # ── Session state ──────────────────────────────────────
+# ── Session state ──────────────────────────────────────
     ss = st.session_state
+    events = _cached_all_events() or []
     if "hist_state"   not in ss: ss.hist_state   = "All"
     if "hist_page"    not in ss: ss.hist_page     = 1
     if "hist_start"   not in ss: ss.hist_start    = None
@@ -1291,7 +1432,36 @@ def page_history():
     if "hist_min_iou" not in ss: ss.hist_min_iou  = 0.65
     if "hist_min_pop" not in ss: ss.hist_min_pop  = 0
 
-    # ── KPI strip ─────────────────────────────────────────
+    # ── Load + filter events ───────────────────────────────
+    all_events = _cached_all_events()
+
+    # Date filter (applied in Python since db.py doesn't take dates yet)
+    if ss.hist_start:
+        from datetime import date as _date
+        all_events = [e for e in all_events
+                      if e["date_utc"][:10] >= str(ss.hist_start)]
+    if ss.hist_end:
+        all_events = [e for e in all_events
+                      if e["date_utc"][:10] <= str(ss.hist_end)]
+
+    # Apply filters
+    filtered = [
+        e for e in all_events
+        if e.get("iou", 1.0) >= ss.hist_min_iou
+        and e.get("affected", 0) >= ss.hist_min_pop
+        and (ss.hist_state == "All" or e.get("state") == ss.hist_state)
+        and (st.session_state.get("hist_state_filter","All") == "All"
+             or e.get("state") == st.session_state.get("hist_state_filter","All"))
+    ]
+    total      = len(filtered)
+    PAGE_SIZE  = 5
+    total_pages = max(1, -(-total // PAGE_SIZE))
+    cur_page    = min(ss.hist_page, total_pages)
+    page_rows   = filtered[(cur_page-1)*PAGE_SIZE : cur_page*PAGE_SIZE]
+
+    
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+# ── KPI strip ─────────────────────────────────────────
     cols = st.columns(4, gap="small")
     for col, (l, v, sub) in zip(cols, [
         ("TOTAL EVENTS",     "47",       "2025 flood season"),
@@ -1303,7 +1473,242 @@ def page_history():
 
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
+
+    st.markdown(f"""
+<div style="height:32px"></div>
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+  <div style="flex:1;height:1px;background:{s.BORDER};"></div>
+  <div style="font-family:'DM Mono',monospace;font-size:10px;
+    color:{s.MUTED};text-transform:uppercase;letter-spacing:.1em;
+    white-space:nowrap;">Season Highlight</div>
+  <div style="flex:1;height:1px;background:{s.BORDER};"></div>
+</div>""", unsafe_allow_html=True)
+
+    # ── Worst Event Callout ────────────────────────────────
+    if events:
+        worst = max(events, key=lambda e: e.get("affected", 0))
+        w_id  = worst.get("event_id", "—")
+        w_ha  = worst.get("flood_ha", 0)
+        w_pop = worst.get("affected", 0)
+        w_loc = worst.get("location", "—")
+        w_ts  = worst.get("date_utc", "—")
+        w_lat = worst.get("latency_min", "—")
+        st.markdown(f"""
+<div style="background:linear-gradient(135deg,{s.CARD} 0%,
+  rgba(239,68,68,0.08) 100%);border:1px solid {s.DANGER};
+  border-left:4px solid {s.DANGER};border-radius:10px;
+  padding:28px 32px;margin-bottom:8px;">
+  <div style="font-family:'DM Mono',monospace;font-size:10px;
+    color:{s.DANGER};text-transform:uppercase;letter-spacing:.1em;
+    margin-bottom:4px;">⚠ Season Peak Event</div>
+  <div style="font-size:12px;color:{s.MUTED};margin-bottom:12px;">
+    The single event this season with the highest number of people at risk.
+    Use this as your reference baseline when writing situation reports.</div>
+  <div style="display:flex;justify-content:space-between;
+    align-items:flex-start;flex-wrap:wrap;gap:16px;">
+    <div>
+      <div style="font-family:'Barlow Condensed',sans-serif;
+        font-size:28px;font-weight:700;color:{s.FG};
+        margin-bottom:4px;">{w_id}</div>
+      <div style="font-size:14px;color:{s.MUTED};">
+        {w_loc} &middot; {w_ts}</div>
+    </div>
+    <div style="display:flex;gap:24px;">
+      <div style="text-align:center;">
+        <div style="font-family:'Barlow Condensed',sans-serif;
+          font-size:28px;font-weight:700;color:{s.DANGER};">
+          {w_ha:,} ha</div>
+        <div style="font-size:11px;color:{s.MUTED};">Flood extent</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-family:'Barlow Condensed',sans-serif;
+          font-size:28px;font-weight:700;color:{s.WARNING};">
+          {w_pop:,}</div>
+        <div style="font-size:11px;color:{s.MUTED};">People at risk</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-family:'Barlow Condensed',sans-serif;
+          font-size:28px;font-weight:700;color:{s.ACCENT};">
+          {w_lat} min</div>
+        <div style="font-size:11px;color:{s.MUTED};">Alert latency</div>
+      </div>
+    </div>
+  </div>
+</div>""", unsafe_allow_html=True)
+
+
+    st.markdown(f"""
+<div style="height:32px"></div>
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+  <div style="flex:1;height:1px;background:{s.BORDER};"></div>
+  <div style="font-family:'DM Mono',monospace;font-size:10px;
+    color:{s.MUTED};text-transform:uppercase;letter-spacing:.1em;
+    white-space:nowrap;">Response Performance</div>
+  <div style="flex:1;height:1px;background:{s.BORDER};"></div>
+</div>""", unsafe_allow_html=True)
+
+    # ── Response Latency Timeline ───────────────────────────
+    st.markdown(f"""
+<div style="font-family:'DM Mono',monospace;font-size:11px;
+  color:{s.MUTED};text-transform:uppercase;letter-spacing:.06em;
+  margin-bottom:4px;">Alert Response Latency per Event</div>
+<div style="font-size:13px;color:{s.FG};margin-bottom:12px;line-height:1.5;">
+  How quickly was each flood alert dispatched after satellite detection?
+  The target is 45 minutes. The SLA ceiling is 60 minutes.
+  Any bar above 60 minutes (red) means the alert was delayed beyond
+  the agreed response window.</div>
+<div style="height:20px"></div>""",
+        unsafe_allow_html=True)
+
+    if filtered:
+        import plotly.graph_objects as go
+        lat_events = [e.get("event_id","?") for e in filtered[:20]]
+        lat_vals   = [e.get("latency_min", 45) for e in filtered[:20]]
+        lat_cols   = [s.SUCCESS if v <= 45 else s.WARNING if v <= 60
+                      else s.DANGER for v in lat_vals]
+
+        fig_lat = go.Figure()
+        fig_lat.add_trace(go.Bar(
+            x=lat_events, y=lat_vals,
+            marker_color=lat_cols,
+            hovertemplate="<b>%{x}</b><br>%{y} min<extra></extra>",
+        ))
+        # SLA reference line at 60 min
+        fig_lat.add_hline(
+            y=60, line_dash="dash",
+            line_color=s.DANGER, line_width=1,
+            annotation_text="60 min SLA",
+            annotation_font_color=s.DANGER,
+            annotation_font_size=10,
+        )
+        fig_lat.add_hline(
+            y=45, line_dash="dot",
+            line_color=s.SUCCESS, line_width=1,
+            annotation_text="45 min target",
+            annotation_font_color=s.SUCCESS,
+            annotation_font_size=10,
+        )
+        fig_lat.update_layout(
+            height=180,
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color=s.FG, size=10),
+            margin=dict(l=0, r=0, t=0, b=0),
+            showlegend=False,
+            xaxis=dict(gridcolor=s.BORDER,
+                       tickfont=dict(size=9, color=s.FG),
+                       tickangle=-35),
+            yaxis=dict(gridcolor=s.BORDER,
+                       tickfont=dict(size=9, color=s.FG),
+                       title=dict(text="Minutes",
+                                  font=dict(size=9, color=s.FG))),
+        )
+        st.plotly_chart(fig_lat, width='stretch',
+                        config={"displayModeBar": False})
+        st.markdown(
+            f"<div style='font-size:11px;color:{s.MUTED};"
+            f"font-family:DM Mono,monospace;margin-top:-8px;'>"
+            f"Green = within target (≤45 min) &nbsp;·&nbsp; "
+            f"Amber = within SLA (≤60 min) &nbsp;·&nbsp; "
+            f"Red = SLA breach (&gt;60 min)</div>",
+            unsafe_allow_html=True)
+
+
+    st.markdown(f"""
+<div style="height:32px"></div>
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+  <div style="flex:1;height:1px;background:{s.BORDER};"></div>
+  <div style="font-family:'DM Mono',monospace;font-size:10px;
+    color:{s.MUTED};text-transform:uppercase;letter-spacing:.1em;
+    white-space:nowrap;">Spatial Pattern</div>
+  <div style="flex:1;height:1px;background:{s.BORDER};"></div>
+</div>""", unsafe_allow_html=True)
+
+    # ── Flood Recurrence Heatmap ────────────────────────────
+    st.markdown(f"""
+<div style="font-family:'DM Mono',monospace;font-size:11px;
+  color:{s.MUTED};text-transform:uppercase;letter-spacing:.06em;
+  margin:16px 0 4px;">Flood Recurrence by State &amp; Month</div>
+<div style="font-size:13px;color:{s.FG};margin-bottom:12px;line-height:1.5;">
+  Which states flood most frequently, and in which months?
+  Each cell shows how many detection events occurred in that
+  state during that month. Darker red means more repeated flooding —
+  a signal that pre-positioned supplies and standing alerts are needed.</div>
+<div style="height:20px"></div>""",
+        unsafe_allow_html=True)
+
+    _states  = ["Jonglei", "Unity", "Upper Nile"]
+    _months  = ["Jun","Jul","Aug","Sep","Oct","Nov"]
+    # Build counts from events
+    _grid = {st_: {m: 0 for m in _months} for st_ in _states}
+    for e in events:
+        _es = e.get("state","")
+        _em = e.get("date_utc","")[:7]  # YYYY-MM
+        _month_abbr = {"06":"Jun","07":"Jul","08":"Aug",
+                       "09":"Sep","10":"Oct","11":"Nov"}
+        _mk = _month_abbr.get(_em[-2:], "")
+        if _es in _grid and _mk in _months:
+            _grid[_es][_mk] += 1
+
+    _z    = [[_grid[st_][m] for m in _months] for st_ in _states]
+    _maxv = max(max(row) for row in _z) if any(any(r) for r in _z) else 1
+
+    import plotly.graph_objects as go
+    fig_hm = go.Figure(go.Heatmap(
+        z=_z, x=_months, y=_states,
+        colorscale=[
+            [0,   "rgba(14,165,233,0.05)"],
+            [0.3, "rgba(245,158,11,0.5)"],
+            [0.6, "rgba(239,68,68,0.7)"],
+            [1,   "rgba(239,68,68,1.0)"],
+        ],
+        showscale=False,
+        hovertemplate="<b>%{y} — %{x}</b><br>%{z} event(s)<extra></extra>",
+        text=_z,
+        texttemplate="%{text}",
+        textfont=dict(color=s.FG, size=13),
+    ))
+    fig_hm.update_layout(
+        height=140,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color=s.FG, size=11),
+        margin=dict(l=0, r=0, t=0, b=0),
+        xaxis=dict(side="top", tickfont=dict(color=s.FG, size=11),
+                   linecolor=s.BORDER),
+        yaxis=dict(tickfont=dict(color=s.FG, size=11),
+                   linecolor=s.BORDER),
+    )
+    st.plotly_chart(fig_hm, width='stretch',
+                    config={"displayModeBar": False})
+    st.markdown(
+        f"<div style='font-size:11px;color:{s.MUTED};"
+        f"font-family:DM Mono,monospace;margin-top:-8px;'>"
+        f"Number of detection events per state per month. "
+        f"Darker = more flood events recorded.</div>",
+        unsafe_allow_html=True)
+
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
+
+
+    st.markdown(f"""
+<div style="height:32px"></div>
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+  <div style="flex:1;height:1px;background:{s.BORDER};"></div>
+  <div style="font-family:'DM Mono',monospace;font-size:10px;
+    color:{s.MUTED};text-transform:uppercase;letter-spacing:.1em;
+    white-space:nowrap;">Monthly Trend & Filters</div>
+  <div style="flex:1;height:1px;background:{s.BORDER};"></div>
+</div>""", unsafe_allow_html=True)
+
     # ── Chart + Filter (2/3 + 1/3) ────────────────────────
+    st.markdown(f"""
+<div style='font-size:14px;color:{s.MUTED};line-height:1.65;margin-bottom:16px;'>
+  Use the filters on the right to narrow events by date range, minimum
+  detection quality (IoU) and minimum affected population. The chart
+  updates automatically to reflect your selection.
+</div>""", unsafe_allow_html=True)
     cc, fc = st.columns([2, 1], gap="small")
 
     with cc:
@@ -1407,25 +1812,20 @@ def page_history():
 
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
-    # ── Load + filter events ───────────────────────────────
-    all_events = _cached_all_events()
 
-    # Date filter (applied in Python since db.py doesn't take dates yet)
-    if ss.hist_start:
-        from datetime import date as _date
-        all_events = [e for e in all_events
-                      if e["date_utc"][:10] >= str(ss.hist_start)]
-    if ss.hist_end:
-        all_events = [e for e in all_events
-                      if e["date_utc"][:10] <= str(ss.hist_end)]
-
-    total      = len(all_events)
-    PAGE_SIZE  = 5
-    total_pages = max(1, -(-total // PAGE_SIZE))
-    cur_page    = min(ss.hist_page, total_pages)
-    page_rows   = all_events[(cur_page-1)*PAGE_SIZE : cur_page*PAGE_SIZE]
+    st.markdown(f"""
+<div style="height:32px"></div>
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+  <div style="flex:1;height:1px;background:{s.BORDER};"></div>
+  <div style="font-family:'DM Mono',monospace;font-size:10px;
+    color:{s.MUTED};text-transform:uppercase;letter-spacing:.1em;
+    white-space:nowrap;">Event Archive</div>
+  <div style="flex:1;height:1px;background:{s.BORDER};"></div>
+</div>""", unsafe_allow_html=True)
 
     # ── Event Log card ─────────────────────────────────────
+    # CSV export
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
     with st.container(border=True):
         st.markdown(s.card_header(
             "Event Log",
@@ -1637,6 +2037,16 @@ def page_performance():
                      unsafe_allow_html=True)
 
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+    st.markdown(f"""
+<div style='margin:24px 0 0;padding:20px 0 0;
+  border-top:1px solid {s.BORDER};'>
+  <div style='font-size:15px;color:{s.FG};line-height:1.65;max-width:720px;'>
+    The performance dashboard tracks how well the SuddWatch automated
+    pipeline is running. Each tab covers a different dimension of system
+    health — from raw processing speed to detection accuracy to how
+    consistently we meet our 60-minute alert SLA.
+  </div>
+</div>""", unsafe_allow_html=True)
     tab1, tab2, tab3, tab4 = st.tabs(["Pipeline Timing", "Detection Quality", "SLA Compliance", "Stage Heatmap"])
 
     dates  = ["Aug 14", "Sep 02", "Sep 19", "Oct 08", "Oct 23"]
@@ -1645,7 +2055,16 @@ def page_performance():
 
     # ── TAB 1: Pipeline Timing ─────────────────────────────
     with tab1:
-        c1, c2 = st.columns(2, gap="small")
+        st.markdown(f"""
+<div style='padding:20px 0 8px;'>
+  <div style='font-size:14px;color:{s.MUTED};line-height:1.65;'>
+    <b style='color:{s.FG};'>Pipeline Timing</b> measures how long each
+    detection run takes from satellite data acquisition to alert dispatch.
+    The target is under 45 minutes. The SLA ceiling is 60 minutes —
+    any run exceeding this is flagged as a breach.
+  </div>
+</div>""", unsafe_allow_html=True)
+        c1, c2 = st.columns(2, gap="large")
 
         with c1:
             with st.container(border=True):
@@ -1750,7 +2169,16 @@ def page_performance():
 
     # ── TAB 2: Detection Quality ───────────────────────────
     with tab2:
-        c1, c2 = st.columns(2, gap="small")
+        st.markdown(f"""
+<div style='padding:20px 0 8px;'>
+  <div style='font-size:14px;color:{s.MUTED};line-height:1.65;'>
+    <b style='color:{s.FG};'>Detection Quality</b> measures how accurately
+    the flood mapping algorithm identifies flooded areas. IoU (Intersection
+    over Union) compares our flood boundary to the reference ground truth —
+    a score above 0.65 meets the minimum quality threshold.
+  </div>
+</div>""", unsafe_allow_html=True)
+        c1, c2 = st.columns(2, gap="large")
 
         with c1:
             with st.container(border=True):
@@ -1858,7 +2286,16 @@ def page_performance():
 
     # ── TAB 3: SLA Compliance ─────────────────────────────
     with tab3:
-        c1, c2 = st.columns(2, gap="small")
+        st.markdown(f"""
+<div style='padding:20px 0 8px;'>
+  <div style='font-size:14px;color:{s.MUTED};line-height:1.65;'>
+    <b style='color:{s.FG};'>SLA Compliance</b> tracks whether each detection
+    run met the 60-minute end-to-end commitment. A run is compliant if
+    alerts reach all recipients within 60 minutes of the satellite pass.
+    Non-compliant runs are investigated for pipeline bottlenecks.
+  </div>
+</div>""", unsafe_allow_html=True)
+        c1, c2 = st.columns(2, gap="large")
 
         with c1:
             with st.container(border=True):
@@ -1921,6 +2358,15 @@ def page_performance():
 
     # ── TAB 4: Stage Duration Heatmap ────────────────────
     with tab4:
+        st.markdown(f"""
+<div style='padding:20px 0 8px;'>
+  <div style='font-size:14px;color:{s.MUTED};line-height:1.65;'>
+    <b style='color:{s.FG};'>Stage Heatmap</b> shows how long each pipeline
+    stage took across every detection run. Darker cells mean longer
+    processing time. Use this to spot recurring bottlenecks — if one stage
+    consistently runs slow, that is where optimisation effort should focus.
+  </div>
+</div>""", unsafe_allow_html=True)
         st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
         with st.container(border=True):
             st.markdown(
@@ -2649,7 +3095,7 @@ section[data-testid="stMain"] > div {{min-height:100vh;}}
                                 placeholder="you@organisation.org")
                     _pass   = st.text_input("Password", type="password")
                     _submit = st.form_submit_button("Sign in",
-                                use_container_width=True)
+                                width='stretch')
                 if _submit:
                     _u = DEMO_USERS.get(_email.strip().lower())
                     if _u and _u["password"] == _pass:
@@ -2692,7 +3138,7 @@ section[data-testid="stMain"] > div {{min-height:100vh;}}
                     _ru_pw2   = st.text_input("Confirm password",
                                               type="password")
                     _ru_sub   = st.form_submit_button("Submit request",
-                                    use_container_width=True)
+                                    width='stretch')
                 if _ru_sub:
                     if not all([_ru_name, _ru_org, _ru_email, _ru_pw]):
                         st.error("Please fill in all fields.")
@@ -2707,7 +3153,7 @@ section[data-testid="stMain"] > div {{min-height:100vh;}}
 
             st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
             if st.button("← Back to home", key="sw_back",
-                         use_container_width=True):
+                         width='stretch'):
                 st.session_state.pop("sw_page", None)
                 st.rerun()
 
@@ -2742,104 +3188,130 @@ st.markdown(s.GLOBAL_CSS, unsafe_allow_html=True)
 
 # Light mode override — patches everything GLOBAL_CSS set with dark colours
 if st.session_state.get("theme_choice", "dark") == "light":
-    st.markdown("""<style>
-/* ── App background ── */
-html,body,[data-testid="stApp"],
+    st.markdown(f"""<style>
+/* ── LIGHT MODE OVERRIDE ── */
+html, body,
+[data-testid="stApp"],
 [data-testid="stAppViewContainer"],
 [data-testid="stMainBlockContainer"],
-.block-container {
-    background:#f6f8fa!important;color:#24292f!important;}
+.block-container,
+[data-testid="stVerticalBlock"] {{
+    background:#f6f8fa!important;
+    color:#24292f!important;}}
 
-/* ── Sidebar ── */
+/* Sidebar */
 [data-testid="stSidebar"],
-[data-testid="stSidebar"] > div {
+[data-testid="stSidebar"] > div {{
     background:#ffffff!important;
-    border-right:1px solid #d0d7de!important;}
-[data-testid="stSidebar"] * {color:#24292f!important;}
-[data-testid="stSidebar"] button {
-    background:#f0f2f5!important;color:#24292f!important;
-    border-color:#d0d7de!important;}
-[data-testid="stSidebar"] button:hover {
-    background:#d0d7de!important;}
+    border-right:1px solid #d0d7de!important;}}
+[data-testid="stSidebar"] * {{color:#24292f!important;}}
+[data-testid="stSidebar"] button {{
+    background:#f0f2f5!important;
+    color:#24292f!important;
+    border-color:#d0d7de!important;}}
 
-/* ── Keep accent/blue elements BLUE ── */
-[data-testid="stSidebar"] button[kind="primary"],
-.stMarkdown a, a {color:#0969da!important;}
-
-/* ── Cards and containers ── */
-[data-testid="stExpander"],
+/* Cards — override dark inline backgrounds */
+[data-testid="stExpander"] > div,
 [data-testid="stForm"],
-[data-testid="stMetric"],
-div[data-testid="stVerticalBlock"] > div[style*="border"],
-div[style*="background:#161b22"],
-div[style*="background:#1c2128"],
-div[style*="background:#0d1117"] {
+div[data-testid="stVerticalBlock"] > div > div[style*="background"] {{
     background:#ffffff!important;
-    border-color:#d0d7de!important;}
+    border-color:#d0d7de!important;}}
 
-/* ── All text dark ── */
-p, span, div, label, h1, h2, h3, h4, h5, li, td, th {
-    color:#24292f!important;}
-/* Hero banner: always white on dark photo */
-.sw-hero-overlay, .sw-hero-overlay * {
-    color:#ffffff!important;}
-/* EXCEPT accent/blue — keep blue */
+/* Force ALL text dark */
+*, *::before, *::after {{
+    color:#24292f!important;}}
+
+/* EXCEPT: accent colours keep theirs */
 [style*="color:#0ea5e9"],
-[style*="color:#0969da"] {color:#0969da!important;}
-/* And success/warning/danger keep their colours */
-[style*="color:#22c55e"],[style*="color:#1a7f37"] {color:#1a7f37!important;}
-[style*="color:#f59e0b"],[style*="color:#9a6700"] {color:#9a6700!important;}
-[style*="color:#ef4444"],[style*="color:#cf222e"] {color:#cf222e!important;}
+[style*="color:#0969da"] {{color:#0969da!important;}}
+[style*="color:#22c55e"],
+[style*="color:#1a7f37"] {{color:#1a7f37!important;}}
+[style*="color:#f59e0b"],
+[style*="color:#9a6700"] {{color:#9a6700!important;}}
+[style*="color:#ef4444"],
+[style*="color:#cf222e"] {{color:#cf222e!important;}}
+[style*="color:#a78bfa"],
+[style*="color:#6639ba"] {{color:#6639ba!important;}}
+[style*="color:rgba(255,255,255"] {{color:#ffffff!important;}}
 
-/* ── Inputs ── */
-input, textarea, select,
-[data-testid="stTextInput"] input,
-[data-testid="stTextArea"] textarea {
-    background:#ffffff!important;color:#24292f!important;
-    border-color:#d0d7de!important;}
+/* Hero banner always white */
+.sw-hero-overlay, .sw-hero-overlay * {{
+    color:#ffffff!important;}}
 
-/* ── Buttons ── */
-[data-testid="stButton"] button {
-    background:#ffffff!important;color:#24292f!important;
-    border-color:#d0d7de!important;}
-[data-testid="stButton"] button[kind="primary"] {
-    background:#0969da!important;color:#ffffff!important;
-    border-color:#0969da!important;}
+/* Inputs + date picker */
+input, textarea, select {{
+    background:#ffffff!important;
+    color:#24292f!important;
+    border-color:#d0d7de!important;}}
+/* Date picker calendar popup */
+[data-baseweb="calendar"] {{
+    background:#ffffff!important;
+    color:#24292f!important;}}
+[data-baseweb="calendar"] * {{
+    background:#ffffff!important;
+    color:#24292f!important;}}
+[data-baseweb="calendar"] [aria-selected="true"] {{
+    background:#0969da!important;
+    color:#ffffff!important;}}
+[data-baseweb="calendar"] button:hover {{
+    background:#f0f2f5!important;}}
+[data-baseweb="datepicker"] {{
+    background:#ffffff!important;}}
+[data-baseweb="datepicker"] * {{
+    color:#24292f!important;}}
 
-/* ── Metrics ── */
-[data-testid="stMetricValue"] {color:#0969da!important;}
-[data-testid="stMetricLabel"] {color:#57606a!important;}
-[data-testid="stMetricDelta"] {color:#1a7f37!important;}
+/* Buttons */
+[data-testid="stButton"] button {{
+    background:#ffffff!important;
+    color:#24292f!important;
+    border-color:#d0d7de!important;}}
+[data-testid="stButton"] button[kind="primary"] {{
+    background:#0969da!important;
+    color:#ffffff!important;}}
 
-/* ── Tables / dataframes ── */
-[data-testid="stDataFrame"],
-[data-testid="stTable"] {
-    background:#ffffff!important;}
-[data-testid="stDataFrame"] th {
-    background:#f0f2f5!important;color:#24292f!important;}
+/* Metrics */
+[data-testid="stMetricValue"] {{color:#0969da!important;}}
+[data-testid="stMetricLabel"] {{color:#57606a!important;}}
 
-/* ── Plotly charts ── */
-.js-plotly-plot .plotly .bg {fill:#ffffff!important;}
-.js-plotly-plot .plotly .gridlayer path {stroke:#d0d7de!important;}
+/* Plotly */
+.js-plotly-plot .plotly .bg {{fill:#ffffff!important;}}
 
-/* ── Expander header stays blue ── */
-[data-testid="stExpander"] summary,
+/* Expander header — keep blue */
 [data-testid="stExpander"] summary span,
-[data-testid="stExpander"] summary p {
-    color:#0969da!important;background:#e8f0fe!important;}
+[data-testid="stExpander"] summary p,
+[data-testid="stExpander"] > div > div > div > p {{
+    color:#0969da!important;}}
+[data-testid="stExpander"] summary {{
+    background:#f0f6ff!important;
+    border-color:#0969da!important;}}
 
-/* ── Code blocks ── */
-code, pre {
-    background:#f0f2f5!important;color:#24292f!important;}
+/* Tabs — must beat * selector */
+[data-testid="stTabs"] [role="tab"] *,
+[data-testid="stTabs"] [role="tab"] {{
+    color:#57606a!important;
+    background:transparent!important;}}
+[data-testid="stTabs"] [role="tab"][aria-selected="true"],
+[data-testid="stTabs"] [role="tab"][aria-selected="true"] * {{
+    color:#0969da!important;
+    border-bottom-color:#0969da!important;}}
+[data-testid="stTabs"] [role="tabpanel"] {{
+    background:#f6f8fa!important;}}
+/* Performance page chart text */
+[data-testid="stTabs"] .js-plotly-plot text {{
+    fill:#24292f!important;}}
 
-/* ── Dividers ── */
-hr {border-color:#d0d7de!important;}
-
-/* ── Select boxes, dropdowns ── */
+/* Selectbox, sliders */
 [data-testid="stSelectbox"] > div,
-[data-testid="stMultiSelect"] > div {
-    background:#ffffff!important;color:#24292f!important;
-    border-color:#d0d7de!important;}
+[data-testid="stSlider"] {{
+    background:#ffffff!important;
+    color:#24292f!important;}}
+[data-testid="stSlider"] * {{color:#24292f!important;}}
+
+/* Code */
+code, pre {{
+    background:#f0f2f5!important;
+    color:#24292f!important;}}
+hr {{border-color:#d0d7de!important;}}
 </style>""", unsafe_allow_html=True)
 
 render_sidebar()
