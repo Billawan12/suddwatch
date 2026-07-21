@@ -1,645 +1,480 @@
-# SuddWatch — Operational Flood Detection & Alert System
+# SuddWatch — Operational Flood Detection & Humanitarian Alert System
 
-> **Smart technology, safeguarding communities.**
+<div align="center">
 
-SuddWatch is an end-to-end satellite-based flood detection and humanitarian alert system for the Greater Upper Nile region of South Sudan. It automatically downloads Sentinel-1 SAR imagery, detects flood extents, assesses humanitarian risk, and dispatches SMS and email alerts to field workers — all within a 60-minute SLA from satellite acquisition to alert delivery.
+**SWE3090: Software Project 1 · Summer Semester 2026**  
+**United States International University – Africa**
+
+**Student:** Madut Chan · **ID:** 671336  
+**Supervisor:** Prof. Paul Okanda
+
+[![Python](https://img.shields.io/badge/Python-3.12-blue)](https://python.org)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.58-red)](https://streamlit.io)
+[![Sentinel-1](https://img.shields.io/badge/Data-Sentinel--1%20SAR-green)](https://dataspace.copernicus.eu)
+
+</div>
+
+---
+
+## Abstract
+
+South Sudan is experiencing a deepening humanitarian crisis as annual floods displace hundreds of thousands of people across Jonglei, Unity, and Upper Nile states. The core of the problem is not a lack of satellite data but the failure to convert that data into actionable alerts that reach vulnerable communities before floodwaters arrive. Current flood assessments reach humanitarian responders three to seven days after a flood occurs, and more than half of displaced households receive no warning at all.
+
+SuddWatch addresses this gap by automating the full chain from satellite data acquisition to alert delivery. The system downloads free ESA Sentinel-1 C-band SAR imagery, detects flood extent using a six-stage classification pipeline, quantifies the human impact against WorldPop 2020 population data and OpenStreetMap infrastructure, and dispatches SMS alerts to village chiefs and HTML situation reports to UN coordinators — all within a 30–60 minute SLA from satellite pass to alert delivery.
 
 ---
 
 ## Table of Contents
 
-1. [Project Overview](#1-project-overview)
-2. [System Architecture](#2-system-architecture)
-3. [Repository Structure](#3-repository-structure)
-4. [Prerequisites](#4-prerequisites)
-5. [Installation](#5-installation)
-6. [Configuration](#6-configuration)
-7. [Running the System](#7-running-the-system)
-8. [Dashboard](#8-dashboard)
-9. [Pipeline Modules](#9-pipeline-modules)
-10. [Machine Learning Module](#10-machine-learning-module)
-11. [Alert System](#11-alert-system)
-12. [Testing](#12-testing)
-13. [Scheduling](#13-scheduling)
-14. [Data Sources](#14-data-sources)
-15. [Sprint History](#15-sprint-history)
-16. [Academic Context](#16-academic-context)
+1. [Project Background](#1-project-background)
+2. [Problem Statement](#2-problem-statement)
+3. [Project Objectives](#3-project-objectives)
+4. [System Architecture](#4-system-architecture)
+5. [Technical Implementation](#5-technical-implementation)
+6. [Dashboard](#6-dashboard)
+7. [Installation & Setup](#7-installation--setup)
+8. [Running the System](#8-running-the-system)
+9. [Testing & Evaluation](#9-testing--evaluation)
+10. [Repository Structure](#10-repository-structure)
+11. [Key Design Decisions](#11-key-design-decisions)
+12. [Limitations & Future Work](#12-limitations--future-work)
+13. [Acknowledgements](#13-acknowledgements)
 
 ---
 
-## 1. Project Overview
+## 1. Project Background
 
-### Problem
+Greater Upper Nile — comprising Jonglei, Unity, and Upper Nile states — sits at the heart of the Sudd, one of Africa's largest wetlands. Since 2019, rainfall totals have broken century-long records every year. The 2022 flood season was the worst in recorded history: 4.7 million hectares were inundated at peak, displacing over 918,000 people across four simultaneously flooded states.
 
-South Sudan experiences catastrophic annual flooding across the Greater Upper Nile region (Jonglei, Unity, Upper Nile states). In 2025, over 960,000 people were affected. Humanitarian response is hampered by:
+The existing response ecosystem has three critical gaps, identified through a comparative review of six systems (Copernicus EMS, Dartmouth Flood Observatory, GFM, IGAD FEWS, OCHA Situation Reports, and REACH flood mapping):
 
-- **Late detection** — traditional ground-based reporting takes days
-- **Poor accessibility** — roads are cut off, only satellite data penetrates
-- **No automated alerting** — field workers rely on manual reports
-- **No risk quantification** — extent of flooding affecting villages, roads, and health facilities is unknown
+| Gap | Existing System Behaviour | Impact |
+|---|---|---|
+| **Cloud cover** | Optical satellites blind during 90%+ cloud cover in May–November | Flooding goes undetected for weeks |
+| **Analysis latency** | REACH maps undergo multi-stage QA review; OCHA reports compiled manually | Assessments arrive 3–7 days after a flood |
+| **Last-mile delivery** | Maps distributed as PDF attachments via email and ReliefWeb | Village chiefs with basic mobile phones cannot access the information |
 
-### Solution
-
-SuddWatch automates the entire workflow:
-
-```
-Sentinel-1 SAR → Download → Preprocess → Detect Floods → Assess Risk → Alert
-     (ESA)         (6 GB)   (SNAP GPT)   (6-stage algo)  (population)  (SMS+Email)
-                                                                        < 60 min
-```
-
-### Key Metrics
-
-| Metric | Target | Achieved |
-|--------|--------|----------|
-| Alert latency | ≤ 60 min | 45–52 min avg |
-| Detection IoU | ≥ 0.65 | 0.71 avg |
-| Alert delivery rate | ≥ 95% | SMS + Email confirmed |
-| System uptime | ≥ 99% | 99.2% |
-| Test coverage | — | 99 tests passing |
+SuddWatch builds directly on the technical methodology demonstrated by REACH — adopting the same SAR preprocessing steps, Otsu thresholding, and change detection concept — but extends it with full automation, last-mile SMS delivery, and a sustainable open-source architecture.
 
 ---
 
-## 2. System Architecture
+## 2. Problem Statement
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     SuddWatch System                         │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌──────────┐   ┌──────────────┐   ┌──────────────────────┐ │
-│  │ Sentinel │   │  SNAP GPT    │   │   Flood Detection    │ │
-│  │ Download │──▶│ Preprocess   │──▶│   (6-stage SAR algo) │ │
-│  │ (ESA API)│   │ (calibrate,  │   │   + ML Random Forest │ │
-│  └──────────┘   │  terrain)    │   └──────────┬───────────┘ │
-│                 └──────────────┘              │              │
-│                                               ▼              │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │              Risk Assessment                          │   │
-│  │  WorldPop population · OSM roads · Health facilities │   │
-│  │  Village risk scoring · Infrastructure impact         │   │
-│  └────────────────────────┬─────────────────────────────┘   │
-│                           │                                   │
-│              ┌────────────┴────────────┐                     │
-│              ▼                         ▼                     │
-│  ┌─────────────────┐       ┌─────────────────────────┐      │
-│  │  Alert Dispatch │       │      SQLite Database     │      │
-│  │  SMS (Twilio)   │       │  events · alerts · risk  │      │
-│  │  Email (Gmail)  │       │  villages · roads · HF   │      │
-│  └─────────────────┘       └────────────┬────────────┘      │
-│                                         │                     │
-│                             ┌───────────▼──────────────┐    │
-│                             │   Streamlit Dashboard     │    │
-│                             │   Home · History ·        │    │
-│                             │   Performance · Export    │    │
-│                             │   + Intelligence Feed     │    │
-│                             └──────────────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
-```
+The gap is not technical feasibility but operational translation. SAR-based flood detection at village-level resolution is demonstrated and achievable. The problem is that existing systems:
+
+- Produce static PDF map products rather than structured, queryable data
+- Rely on manual processing workflows that take days, not minutes
+- Distribute outputs through internet-dependent channels that exclude the most vulnerable communities
+- Lack integration between detection outputs and alert dispatch systems
+
+SuddWatch solves this by treating the entire chain — from satellite pass to SMS delivery — as a single automated pipeline with end-to-end latency as the primary design constraint.
 
 ---
 
-## 3. Repository Structure
+## 3. Project Objectives
+
+### Objective 1 — Requirements Analysis
+Conduct a comprehensive literature review and requirements analysis on representative existing systems to identify the technical and operational gaps in flood early-warning for Greater Upper Nile.
+
+**How SuddWatch meets this:**
+- Six systems reviewed across global, regional (Africa), and local (South Sudan) perspectives
+- Technical gaps mapped to specific design requirements: SAR over optical (cloud cover), automated pipeline over manual analysis (latency), SMS over web portals (last-mile delivery)
+- Parameters derived from literature: TPI threshold 0.5, Otsu relaxation factor 1.0, IoU target ≥ 0.65, latency SLA 30–60 minutes, alert delivery target >95%
+- Bounding box (5°–12°N, 29°–35°E) covers all three target states
+
+### Objective 2 — Prototype Development
+Design and develop a prototype flood detection system that addresses latency, last-mile alert delivery, and accessibility in infrastructure-poor environments within a Machine Learning System.
+
+**How SuddWatch meets this:**
+
+| Component | Implementation |
+|---|---|
+| Data acquisition | Copernicus Data Space OData API — queries for new Sentinel-1 IW GRD scenes, downloads on detection, maintains scene registry |
+| SAR preprocessing | ESA SNAP GPT: orbit correction → thermal noise removal → radiometric calibration → speckle filter (Lee, 5×5) → terrain correction (SRTM 3Sec) |
+| Flood detection | 6-stage classifier: VH change detection → Otsu thresholding → loose threshold refinement → TPI filtering → exclusion masking → morphological cleaning |
+| ML classifier | Random Forest trained on labelled SAR scenes (`src/ml_flood_detection.py`) |
+| Risk assessment | Spatial intersection of flood mask with WorldPop 2020 population grid, OSM villages, roads, and health facilities |
+| Alert dispatch | Twilio SMS (160-char to village chiefs) + Gmail SMTP (HTML situation report to coordinators) |
+| Database | SQLite with 6-table schema: events, flood_masks, affected_populations, infrastructure_impacts, alerts, processing_logs |
+| Dashboard | Streamlit operational dashboard with landing page, authentication, and 5 pages |
+
+### Objective 3 — Testing & Evaluation
+Test and evaluate the SuddWatch prototype to assess the extent to which it addresses the identified issues.
+
+**How SuddWatch meets this:**
+- 53 automated unit tests covering data acquisition (20 tests) and preprocessing (33 tests)
+- Performance dashboard tracks IoU, end-to-end latency, SLA compliance rate, and per-stage timing
+- Evaluation targets: IoU ≥ 0.65, latency ≤ 60 min, alert delivery success >95%
+
+---
+
+## 4. System Architecture
 
 ```
-suddwatch/
-├── src/                          # Core pipeline modules
-│   ├── config.py                 # Central configuration (env vars, paths)
-│   ├── database.py               # SQLite DatabaseManager (6 tables)
-│   ├── data_acquisition.py       # Sentinel-1 scene downloader (ESA Copernicus)
-│   ├── preprocessing.py          # SNAP GPT SAR preprocessing pipeline
-│   ├── flood_detection.py        # 6-stage threshold-based flood detector
-│   ├── ml_flood_detection.py     # Random Forest ML flood classifier
-│   ├── risk_assessment.py        # Population & infrastructure overlay
-│   ├── alerts.py                 # SMS (Twilio) + Email (SMTP) dispatch
-│   └── pipeline.py               # End-to-end orchestrator
-│
-├── dashboard/                    # Streamlit web dashboard
-│   ├── app.py                    # Main application (4 pages)
-│   ├── styles.py                 # CSS tokens + HTML component helpers
-│   └── db.py                     # Dashboard DB bridge (real + demo data)
-│
-├── tests/                        # Pytest test suite
-│   ├── conftest.py               # Pytest configuration + custom marks
-│   ├── test_data_acquisition.py  # Downloader tests
-│   ├── test_preprocessing.py     # Preprocessor tests
-│   └── test_pipeline.py          # Alerts + pipeline tests (48 tests)
-│
-├── data/                         # Data files (gitignored)
-│   ├── raw/                      # Downloaded Sentinel-1 scene ZIPs
-│   ├── processed/                # SNAP GPT preprocessed GeoTIFFs
-│   ├── flood_masks/              # Binary flood mask outputs
-│   ├── database/                 # suddwatch.db SQLite database
-│   ├── dem/                      # Copernicus DEM 30m
-│   ├── worldpop/                 # WorldPop 2020 population raster
-│   └── osm/                      # OpenStreetMap roads, health, villages
-│
-├── config/
-│   └── snap_preprocess_test_scene.xml   # SNAP GPT graph template
-│
-├── logs/                         # Pipeline logs (gitignored)
-├── run_pipeline.py               # Cron entry point
-├── CRON_SETUP.md                 # Scheduling guide (macOS + Linux)
-├── requirements.txt              # Python dependencies
-├── .env.example                  # Credentials template
-└── README.md                     # This file
+┌──────────────────────────────────────────────────────────┐
+│                   AUTOMATED PIPELINE                     │
+│               (triggered by cron / manual)               │
+└──────────────────────────────────────────────────────────┘
+
+Copernicus Data Space
+        │  OData API query
+        ↓
+┌──────────────────────┐
+│  data_acquisition.py │  Downloads new Sentinel-1 IW GRD scenes
+└──────────┬───────────┘  Maintains scene registry
+           │ .zip → data/raw/
+           ↓
+┌──────────────────────┐
+│  preprocessing.py    │  ESA SNAP GPT — 6 operators, ~8 min/scene
+└──────────┬───────────┘
+           │ .tif → data/processed/
+           ↓
+┌──────────────────────┐
+│  flood_detection.py  │  Otsu + TPI + change detection → binary mask
+└──────────┬───────────┘  IoU scored against reference
+           │ flood_mask.tif → data/flood_masks/
+           ↓
+┌──────────────────────┐
+│  risk_assessment.py  │  WorldPop 2020 + OSM intersection
+└──────────┬───────────┘  Village / road / facility risk records
+           │
+           ├──────────────────────────────────────┐
+           ↓                                      ↓
+┌──────────────────────┐           ┌──────────────────────┐
+│  alerts.py           │           │  database.py          │
+│  SMS via Twilio      │           │  Writes to SQLite     │
+│  Email via Gmail     │           │  data/database/       │
+└──────────────────────┘           └──────────┬───────────┘
+                                              │
+                              ┌───────────────▼──────────────┐
+                              │  dashboard/db.py              │
+                              │  Reads from pipeline DB       │
+                              │  Falls back to seed data      │
+                              └───────────────┬──────────────┘
+                                              │
+                              ┌───────────────▼──────────────┐
+                              │  dashboard/app.py (Streamlit) │
+                              │  Operational dashboard        │
+                              └──────────────────────────────┘
 ```
 
 ---
 
-## 4. Prerequisites
+## 5. Technical Implementation
 
-### System Requirements
+### 5.1 SAR Processing Pipeline
 
-| Requirement | Version | Notes |
-|-------------|---------|-------|
-| Python | 3.12+ | Tested on 3.12.6 |
-| ESA SNAP | 10.0+ | For SAR preprocessing |
-| macOS / Linux | — | Windows not tested |
-| RAM | ≥ 8 GB | Sentinel-1 scenes are large |
-| Disk | ≥ 50 GB | Raw scenes + processed outputs |
+The preprocessing chain follows standard Sentinel-1 IW GRD methodology:
 
-### Accounts Required
+```
+1. Apply Orbit File          → Corrects satellite orbital parameters
+2. Thermal Noise Removal     → Removes thermal noise pattern from IW GRD
+3. Radiometric Calibration   → Converts DN to sigma-naught (σ°) in dB
+4. Speckle Filter (Lee 5×5)  → Reduces multiplicative SAR speckle noise
+5. Range-Doppler TC          → Terrain correction using SRTM 3Sec DEM
+6. Linear to dB              → Convert to logarithmic scale for thresholding
+```
 
-| Service | Purpose | Cost |
-|---------|---------|------|
-| Copernicus Data Space | Sentinel-1 download | Free |
-| Twilio | SMS alerts | Pay-per-use (~$0.01/SMS) |
-| Gmail | Email alerts | Free (app password required) |
+### 5.2 Flood Detection Algorithm
 
-### ESA SNAP Installation
+Six-stage classifier based on established SAR flood detection literature:
 
-1. Download SNAP from https://step.esa.int/main/download/snap-download/
-2. Install to `/Applications/esa-snap/` (macOS) or `/opt/esa-snap/` (Linux)
-3. Verify: `/Applications/esa-snap/bin/gpt --version`
+```
+Stage 1: Change Detection
+  Compare current VH backscatter against dry-season baseline
+  Pixels with decrease > 2 dB flagged as potential flood
+
+Stage 2: Otsu Thresholding
+  Apply Otsu method to VH band histogram
+  Produces optimal binary threshold separating water from land
+
+Stage 3: Loose Threshold Refinement
+  Cluster density analysis to reduce false positives
+
+Stage 4: TPI Filtering
+  Compute Topographic Position Index (inner 100px, outer 500px)
+  Exclude pixels with TPI > 0.5 (ridges, hillslopes)
+
+Stage 5: Exclusion Masking
+  Apply permanent water body mask
+  Exclude urban areas where SAR response is ambiguous
+
+Stage 6: Morphological Cleaning
+  Remove isolated single-pixel detections
+  Fill small holes in flood polygons
+```
+
+**Quality metric:** IoU (Intersection over Union) against reference flood mask. Target: ≥ 0.65.
+
+### 5.3 Risk Assessment
+
+Spatial intersection of flood mask with:
+- **WorldPop 2020** (1km resolution) — estimates affected population
+- **OSM Villages** — identifies named settlements within flood boundary
+- **OSM Roads** — identifies road segments classified as flooded/at risk
+- **OSM Health Facilities** — identifies health posts and clinics at risk
+
+### 5.4 Alert System
+
+Two channels dispatch simultaneously upon confirmed flood detection:
+
+**SMS (Twilio) — 160 characters**
+```
+SUDDWATCH ALERT | EVT-2026-047
+Flood detected: Bor South, Jonglei
+Area: 1,200 ha | Pop: 5,000 at risk
+Roads: 3 cut off | Facilities: 2
+Alert ID: SW-2026-047-001
+```
+
+**Email (Gmail SMTP)** — Full HTML situation report with event summary, village-level breakdown, road accessibility matrix, health facility status, and recommended response actions.
+
+### 5.5 Database Schema
+
+```sql
+events               -- One record per detection event
+flood_masks          -- GeoTIFF path + IoU + flood extent ha
+affected_populations -- One record per affected village
+infrastructure_impacts -- Roads and health facilities at risk
+alerts               -- Alert dispatch log (SMS/email per recipient)
+processing_logs      -- Per-stage timing and status for each run
+```
 
 ---
 
-## 5. Installation
+## 6. Dashboard
+
+Built with Streamlit 1.58. Serves as the primary interface for humanitarian coordinators and system administrators.
+
+### Pages
+
+| Page | Description |
+|---|---|
+| **Home** | Live event banner, 6 KPI cards, 10-layer interactive flood map (Folium/OpenStreetMap), satellite acquisition timeline, alert feed, field media section, humanitarian intelligence feed |
+| **History** | Season peak event callout, response latency timeline with SLA reference lines, flood recurrence heatmap (states × months), monthly trend chart, event archive with filters |
+| **Performance** | Pipeline timing, detection quality (IoU tracking), SLA compliance rate, stage duration heatmap |
+| **Export** | 3-step wizard: scope selection → format & layer selection → generation. Formats: GeoJSON, Shapefile, CSV, GeoTIFF, PDF Situation Report |
+| **Admin** | User management, alert configuration, pipeline controls (manual trigger), audit log, system health |
+
+### Interactive Map — 10 Toggleable Layers
+
+| Layer | Description |
+|---|---|
+| Flood Zones | Historical SAR-derived flood extents for all three states |
+| Flood Severity | 3 concentric rings (severe/moderate/minor) from active event |
+| Major Waterways | White Nile, Sobat River, Bahr el Ghazal, Pibor River |
+| Villages | DB-driven pins coloured by risk level (High/Medium/Low) |
+| Health Facilities | Red = at risk, Green = safe |
+| IDP Camps | Bentiu PoC, Malakal PoC, and active displacement sites |
+| UN/NGO Sites | OCHA, WFP, MSF, IRC, UNICEF coordination points |
+| Roads | Colour-coded by flood status (flooded/at risk/passable) |
+| Alert Recipients | Alert dispatch markers |
+| Satellite Coverage | Sentinel-1 IW swath boundary |
+
+### Demo Credentials
+
+| Email | Password | Role |
+|---|---|---|
+| `admin@suddwatch.org` | `admin123` | Admin |
+| `coord@ocha.org` | `ocha2025` | User |
+| `analyst@reach.org` | `reach2025` | User |
+
+> These are demonstration credentials for SWE3090 academic evaluation only. A production deployment would use a proper authentication database with hashed passwords.
+
+---
+
+## 7. Installation & Setup
+
+### Prerequisites
+
+| Requirement | Notes |
+|---|---|
+| Python 3.12+ | |
+| ESA SNAP 9.0+ | GPT at `/Applications/esa-snap/bin/gpt` (macOS) |
+| Copernicus account | Free: https://dataspace.copernicus.eu |
+| Twilio account | SMS gateway |
+| Gmail App Password | 2FA must be enabled |
+
+### Setup
 
 ```bash
-# Clone the repository
+# Clone
 git clone https://github.com/Billawan12/suddwatch.git
 cd suddwatch
 
-# Create virtual environment
+# Virtual environment
 python3 -m venv venv
 source venv/bin/activate
 
-# Install dependencies
+# Dependencies
 pip install -r requirements.txt
 
-# Create data directories
-mkdir -p data/{raw,processed,flood_masks,database,dem,worldpop,osm,models}
-mkdir -p logs
+# Credentials
+cp .env.example .env
+# Edit .env with your credentials
+
+# Verify configuration
+python3 src/config.py
+
+# Launch dashboard
+streamlit run dashboard/app.py
 ```
 
-### Data Files Required
-
-Place the following files in their respective directories:
-
-| File | Location | Source |
-|------|----------|--------|
-| `south_sudan_dem.tif` | `data/dem/` | Copernicus DEM 30m |
-| `south_sudan_pop_2020_1km.tif` | `data/worldpop/` | WorldPop 2020 |
-| `roads.geojson` | `data/osm/` | OpenStreetMap |
-| `health_facilities.geojson` | `data/osm/` | OpenStreetMap |
-| `villages.geojson` | `data/osm/` | OpenStreetMap |
-
----
-
-## 6. Configuration
-
-Copy `.env.example` to `.env` and fill in all values:
+### Environment Variables
 
 ```bash
-cp .env.example .env
-nano .env
-```
-
-### Required Environment Variables
-
-```env
-# ESA Copernicus Data Space (Sentinel-1 download)
-COPERNICUS_USERNAME=your_email@example.com
+COPERNICUS_USER=your_email@example.com
 COPERNICUS_PASSWORD=your_password
-
-# Area of Interest — Greater Upper Nile, South Sudan
-AOI_MIN_LON=28.0
-AOI_MAX_LON=35.0
-AOI_MIN_LAT=4.0
-AOI_MAX_LAT=12.0
-
-# Twilio SMS (https://console.twilio.com)
 TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-TWILIO_PHONE_NUMBER=+12543472821
-SMS_RECIPIENTS=+254700000001,+254700000002
-
-# Gmail SMTP (use App Password, not account password)
-# Gmail → Settings → Security → 2FA → App Passwords
-SMTP_USER=your_email@gmail.com
-SMTP_PASSWORD=your_16_char_app_password
-EMAIL_RECIPIENTS=recipient@example.com
-
-# Alert thresholds
-ALERT_FLOOD_THRESHOLD_HA=500
-ALERT_POPULATION_THRESHOLD=1000
-
-# SNAP GPT path
-SNAP_GPT_PATH=/Applications/esa-snap/bin/gpt
+TWILIO_PHONE_NUMBER=+1xxxxxxxxxx
+SMTP_USER=your_gmail@gmail.com
+SMTP_PASSWORD=xxxx xxxx xxxx xxxx
+GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
+SMS_RECIPIENTS=+211921000001,+211921000002
+EMAIL_RECIPIENTS=coord@ocha.org,analyst@reach.org
 ```
-
-### Gmail App Password
-
-Gmail requires an App Password (not your regular password) for SMTP:
-1. Go to https://myaccount.google.com/security
-2. Enable 2-Factor Authentication
-3. Search for "App passwords"
-4. Create a new app password for "Mail"
-5. Use the 16-character password in `.env`
-
-### Twilio Kenya SMS
-
-To send SMS to Kenyan numbers (`+254`):
-1. Log in to https://console.twilio.com
-2. Go to **Messaging → Settings → Geo Permissions**
-3. Find **Kenya (KE)** and enable it
 
 ---
 
-## 7. Running the System
+## 8. Running the System
 
-### Verify installation
+### Manual Pipeline Run
 
 ```bash
-cd ~/suddwatch && source venv/bin/activate
-
-# Test configuration
-python src/config.py
-
-# Test pipeline initialisation (no downloads)
-python run_pipeline.py --dry-run
-
-# Test alert connectivity
-python src/alerts.py
+source venv/bin/activate
+python3 run_pipeline.py
 ```
 
-### Run the pipeline manually
+### Automated Scheduling
+
+See [`CRON_SETUP.md`](CRON_SETUP.md) for full cron configuration. The pipeline runs every 6 days to match the Sentinel-1 repeat cycle.
 
 ```bash
-python run_pipeline.py --verbose
+# Example cron — 06:00 every 6 days
+0 6 */6 * * /path/to/venv/bin/python3 /path/to/suddwatch/run_pipeline.py >> logs/pipeline.log 2>&1
 ```
 
-### Run the dashboard
+### Dashboard Modes
+
+The dashboard operates in two modes automatically:
+- **Real data mode** — when `data/database/suddwatch.db` contains pipeline results
+- **Demo data mode** — fallback with realistic seed data when DB is empty
+
+---
+
+## 9. Testing & Evaluation
 
 ```bash
-streamlit run dashboard/app.py
-# Opens at http://localhost:8501
-```
-
-### Run tests
-
-```bash
-# Unit tests only (no API calls)
-pytest tests/ -m "not integration" -v
-
-# All tests including live connectivity
+# All tests
 pytest tests/ -v
+
+# With coverage
+pytest tests/ --cov=src --cov-report=term-missing
+```
+
+### Test Coverage
+
+| File | Tests | Areas Covered |
+|---|---|---|
+| `test_data_acquisition.py` | 20 | Registry I/O, API token refresh, scene filtering, download validation |
+| `test_preprocessing.py` | 33 | SNAP path validation, graph construction, I/O path handling, error handling |
+| `test_pipeline.py` | — | Full pipeline integration with mock Copernicus responses |
+
+### Evaluation Metrics
+
+| Metric | Target | Source |
+|---|---|---|
+| IoU Score | ≥ 0.65 | Intersection over Union vs. reference mask |
+| End-to-end latency | ≤ 60 min | Satellite acquisition → alert delivery |
+| Alert delivery rate | > 95% | Twilio/SMTP confirmation rate |
+
+---
+
+## 10. Repository Structure
+
+```
+suddwatch/
+├── src/                        # Pipeline backend
+│   ├── config.py               # Central configuration (reads .env)
+│   ├── data_acquisition.py     # Copernicus OData API + download
+│   ├── preprocessing.py        # ESA SNAP GPT SAR processing
+│   ├── flood_detection.py      # 6-stage flood classifier
+│   ├── ml_flood_detection.py   # Random Forest alternative classifier
+│   ├── risk_assessment.py      # Population + infrastructure impact
+│   ├── alerts.py               # Twilio SMS + Gmail SMTP
+│   ├── database.py             # SQLite schema + writes
+│   └── pipeline.py             # Pipeline orchestrator
+├── dashboard/                  # Streamlit frontend
+│   ├── app.py                  # Main application (~4,200 lines)
+│   ├── db.py                   # DB reader (real + demo fallback)
+│   ├── styles.py               # Design system
+│   └── landing.html            # Public landing page
+├── tests/                      # 53 automated tests
+├── config/                     # SNAP GPT graph XML
+├── run_pipeline.py             # Pipeline entry point
+├── requirements.txt
+├── CRON_SETUP.md
+├── .env.example
+└── .gitignore
 ```
 
 ---
 
-## 8. Dashboard
+## 11. Key Design Decisions
 
-The Streamlit dashboard provides real-time monitoring across 4 pages with modern UX enhancements:
+**Why Sentinel-1 SAR?**
+C-band SAR penetrates cloud cover reliably. During the May–November rainy season, Greater Upper Nile has 90%+ cloud cover for weeks — making optical sensors unusable at exactly the time flood monitoring is most critical. ESA provides Sentinel-1 data free of charge via Copernicus.
 
-### Home — Live Event
+**Why 60 minutes?**
+OCHA South Sudan and WFP field reports indicate the critical evacuation window — between floodwaters rising and roads becoming impassable — is typically 45–90 minutes. A 60-minute SLA targets the midpoint of this window. REACH flood maps arrive weeks after acquisition, well beyond any evacuation window.
 
-- **Satellite acquisition timeline**: horizontal strip showing last 14 Sentinel-1 passes — blue=acquired, amber=partial, grey=no pass. Reads real scene registry automatically.
-- **KPI strip with sparklines**: 6 cards (flood extent, affected population, active alerts, latency, IoU, season events) each with a tiny inline SVG trend sparkline showing the last 6 events
-- **Animated SAR-style map**: flood extent polygons, village risk markers, health facility crosses, state boundaries, animated radar pulse rings, orbiting satellite icon, frosted-glass HUD overlays
-- **Human cost annotation panel**: below the map — 4 priority locations with population counts and status (Bor South, Bentiu IDP, Akobo East, Leer County)
-- **Right panel**: active event metrics, detection QA progress bars, alert delivery status, pipeline status
-- **State breakdown**: per-state flood extent, affected population, and alert counts
-- **Data tables**: affected villages, inaccessible roads, health facilities at risk
-- **Alerts feed**: live system alerts with timestamps and severity badges
-- **Intelligence Feed**: live humanitarian articles from ReliefWeb API (approved appname: usiu-suddwatch-swe3090-2026) — 9-card grid mixing 2025 flood snapshots and 2026 humanitarian updates from OCHA, IFRC, WFP, FAO, FEWS NET
+**Why SMS?**
+Village chiefs in remote Greater Upper Nile have mobile coverage but no reliable internet. SMS works on any GSM handset, requires no data connection, and costs fractions of a cent per message. The 160-character alert conveys all operationally critical information in a single message.
 
-### History — Flood Events Archive
+**Why SQLite?**
+The pipeline produces at most one event per 6-day satellite pass. SQLite is more than sufficient, requires zero configuration, and produces a single portable file. This eliminates operational complexity in a resource-constrained humanitarian environment.
 
-- Season KPI strip (fixed totals, not filtered)
-- Dual-axis bar chart: events + hectares by month with **Compare 2024 toggle** — overlays previous season as dashed line
-- Filter panel: date range (calendar picker), state, min IoU, min population
-- Event log with expandable rows: **state-specific mini SVG maps** (Jonglei/Unity/Upper Nile each have unique river and flood zone positions), metrics, pipeline timings, top villages
-- Per-event downloads: GeoJSON, PDF situation report, CSV data
-- Pagination: 5 events per page
+**Why Streamlit?**
+Allows a full operational dashboard to be built and maintained entirely in Python without a separate frontend framework. Correct trade-off between capability and maintainability for a research prototype.
 
-### Performance — System Metrics
-
-- **Pipeline Timing tab**: latency trend (smooth curve), stage duration chart, per-event table with SLA badges
-- **Detection Quality tab**: IoU trend, latency vs IoU scatter with quadrant labels, alert delivery bars
-- **SLA Compliance tab**: stacked compliance chart, threshold table with PASS/FAIL badges
-- **Stage Heatmap tab**: colour grid showing duration per pipeline stage per event — green=fast, amber=medium, red=slow. Reads live DB data. Includes bottleneck insight callout.
-
-### Export — Data & Reports
-
-- 3-step builder: scope (single event / full season) → format (GeoJSON/Shapefile/CSV/PDF/GeoTIFF) → layers
-- **Live format preview panel**: shows first rows/features of the export before generating
-- Live export summary (format, events, layers, estimated size)
-- Generate & download working exports
-- Download history with re-download functionality
+**Why a demo data fallback?**
+The dashboard auto-detects whether real pipeline data exists and falls back to seed data if not. This allows the dashboard to be demonstrated and evaluated independently of whether the full pipeline has been run — critical for academic assessment.
 
 ---
 
-## 9. Pipeline Modules
+## 12. Limitations & Future Work
 
-### `src/config.py`
+| Limitation | Impact |
+|---|---|
+| 6-day Sentinel-1 revisit cycle | Cannot detect flooding that begins and recedes between passes |
+| SNAP GPT ~8 min/scene | Reduces available buffer within 60-min SLA on slow hardware |
+| ML classifier requires labelled training data | Detection quality depends on availability of validated masks |
+| Admin panel is a prototype | Approve/reject buttons do not write to an authentication database |
+| Static SMS recipient list | No self-service registration for village chiefs |
 
-Central configuration dataclass. Loads all credentials from `.env`, validates file paths, and initialises logging. All other modules receive a `Config` instance.
-
-### `src/database.py`
-
-SQLite `DatabaseManager` with 6 tables:
-
-| Table | Purpose |
-|-------|---------|
-| `events` | One row per processed Sentinel-1 scene |
-| `processing_logs` | Per-stage timing and status |
-| `flood_masks` | GeoTIFF paths and flood extent |
-| `affected_villages` | Risk-scored village records |
-| `infrastructure_impacts` | Roads and health facilities |
-| `alerts` | SMS and email delivery records |
-
-### `src/data_acquisition.py`
-
-Downloads new Sentinel-1 IW GRD scenes from ESA Copernicus Data Space API. Maintains a local registry (`data/downloaded_scenes.json`) to avoid re-downloading.
-
-### `src/preprocessing.py`
-
-SNAP GPT preprocessing pipeline:
-1. Apply Orbit File (precise orbit correction)
-2. Thermal Noise Removal
-3. Calibration (sigma0 backscatter)
-4. Speckle Filtering (Lee filter, 5×5)
-5. Terrain Correction (Range-Doppler, 10m output)
-6. Subset to AOI
-7. Convert to dB
-
-### `src/flood_detection.py`
-
-6-stage threshold-based SAR flood detector:
-1. Otsu threshold on backscatter histogram
-2. GMM loose threshold (2-component Gaussian)
-3. Change detection vs baseline scene
-4. TPI filter (remove topographic highs)
-5. Exclusion mask (permanent water, urban)
-6. Morphological cleaning (remove noise, fill holes)
-
-### `src/risk_assessment.py`
-
-Overlays flood mask with humanitarian datasets:
-- **WorldPop** (100m): estimates affected population per village
-- **OSM roads**: identifies inaccessible road segments + alternative routes
-- **OSM health facilities**: flags at-risk clinics, hospitals, health posts
-- **OSM villages**: scores each village by flood risk percentage
-
-### `src/alerts.py`
-
-Dual-channel alert dispatch:
-- **SMS** via Twilio REST API — concise 160-char message, sent first
-- **Email** via Gmail SSL (port 465) — full HTML situation report
-- Retry logic: 2 attempts per recipient before marking failed
-- All deliveries logged to `alerts` table in SQLite
-
-### `src/pipeline.py`
-
-End-to-end orchestrator. Calls all modules in sequence with:
-- Per-stage timing via `_timed_stage()` wrapper
-- Per-scene try/except — one failure doesn't abort the run
-- Full database logging at each stage
-- IoU computation against reference masks (placeholder until ground truth available)
+**Future work:** Sentinel-1 burst processing (~2 min/scene), MODIS/Landsat fusion for daily monitoring, WhatsApp delivery channel, field validation mobile app, automatic model retraining.
 
 ---
 
-## 10. Machine Learning Module
+## 13. Acknowledgements
 
-### `src/ml_flood_detection.py`
+I am profoundly grateful to the Almighty for the strength, wisdom, and resilience provided throughout the completion of this project.
 
-Random Forest pixel classifier that improves on threshold-based detection.
+My deepest appreciation is extended to my supervisor, **Prof. Paul Okanda**, whose expert guidance and constructive feedback were instrumental in defining the technical direction and quality of the SuddWatch system.
 
-**Feature set (11 features per pixel):**
+I would also like to recognize the faculty and staff within the School of Science and Technology at USIU-Africa, my classmates and colleagues for insightful discussions, and my family for their unwavering love, prayers, and support.
 
-| # | Feature | Description |
-|---|---------|-------------|
-| 1 | VH backscatter | Raw SAR signal (primary flood indicator) |
-| 2 | Local mean 3×3 | Smoothed neighbourhood backscatter |
-| 3 | Local mean 7×7 | Wider context window |
-| 4 | Local std 3×3 | Texture roughness |
-| 5 | Local range 5×5 | Local contrast |
-| 6 | Gradient magnitude | Edge strength |
-| 7 | Sobel X | Horizontal edges |
-| 8 | Sobel Y | Vertical edges |
-| 9 | Laplacian | Second-order edges |
-| 10 | Percentile rank | Relative intensity within local window |
-| 11 | Z-score | Scene-normalised backscatter |
+### Data Sources
 
-**Model configuration:**
-- `RandomForestClassifier(n_estimators=200, class_weight="balanced", oob_score=True)`
-- Probability threshold: 0.45 (tuned for high recall — humanitarian context)
-- Subsampled training: max 50,000 pixels per scene
-- Chunk-based prediction for large rasters (500,000 pixels/chunk)
-
-**Self-test results (synthetic data):**
-```
-OOB accuracy:    0.9999
-Top feature:     local_mean_7x7 (35.5%)
-Training time:   ~18 seconds (225,000 pixels, 200 trees)
-```
-
-**Usage:**
-```python
-from src.ml_flood_detection import MLFloodDetector
-
-detector = MLFloodDetector(config)
-
-# Train on labeled data
-detector.train(image_paths, mask_paths)
-
-# Predict (drop-in for FloodDetector.detect())
-mask_path, flood_ha = detector.detect(preprocessed_tif)
-
-# Or get probability map
-mask_path, flood_ha, prob_map = detector.predict(preprocessed_tif)
-
-# Evaluate against ground truth
-metrics = detector.evaluate(image_path, reference_mask_path)
-# Returns: {iou, f1, precision, recall, accuracy}
-```
+| Data | Source | Licence |
+|---|---|---|
+| Sentinel-1 IW GRD SAR imagery | ESA Copernicus Data Space | Free, open access |
+| WorldPop 2020 population grid | WorldPop / University of Southampton | CC BY 4.0 |
+| OpenStreetMap roads, villages, health facilities | OpenStreetMap contributors | ODbL |
+| SRTM 3Sec DEM | NASA / USGS (via ESA SNAP) | Public domain |
 
 ---
 
-## 11. Alert System
-
-### SMS Alert Format
-
-```
-[SUDDWATCH CRITICAL] EVT-2025-047
-Flood: 1,200 ha | Pop at risk: 6,637
-Top area: Bor South
-Time: 2025-10-23 14:30 UTC
-Dashboard: http://localhost:8501
-```
-
-### Email Alert
-
-Full HTML situation report including:
-- KPI cards (flood extent, affected population, high-risk villages, roads blocked)
-- Affected villages table (top 10 with population and risk %)
-- Inaccessible roads list with alternative routes
-- Health facilities at risk
-- Link to dashboard
-
-### Alert Thresholds
-
-Alerts fire when **either** condition is met:
-- Flood extent ≥ 500 ha (configurable via `ALERT_FLOOD_THRESHOLD_HA`)
-- Affected population ≥ 1,000 (configurable via `ALERT_POPULATION_THRESHOLD`)
-
-### Connectivity Test
-
-```bash
-python -c "
-from src.config import Config
-from src.alerts import AlertManager
-cfg = Config()
-alerter = AlertManager(cfg)
-print(alerter.test_connectivity())
-# {'twilio': True, 'smtp': True, 'errors': []}
-"
-```
-
----
-
-## 12. Testing
-
-```bash
-# Run all unit tests (excludes live API calls)
-pytest tests/ -m "not integration" -v
-
-# Run with coverage
-pytest tests/ -m "not integration" --cov=src --cov-report=term-missing
-
-# Run live connectivity tests (requires credentials)
-pytest tests/ -m "integration" -v
-```
-
-### Test Summary
-
-| Test File | Tests | What It Covers |
-|-----------|-------|----------------|
-| `test_data_acquisition.py` | 25 | Scene download, registry, AOI validation |
-| `test_preprocessing.py` | 26 | SNAP GPT pipeline, output validation |
-| `test_pipeline.py` | 48 | AlertManager, FloodPipeline, thresholds, formatting |
-| **Total** | **99** | **All passing** |
-
----
-
-## 13. Scheduling
-
-See `CRON_SETUP.md` for full instructions. Quick start:
-
-### macOS — launchd (recommended)
-
-```bash
-# Load the launchd job (runs every 12 hours)
-launchctl load ~/Library/LaunchAgents/com.suddwatch.pipeline.plist
-
-# Run immediately for testing
-launchctl start com.suddwatch.pipeline
-
-# Check logs
-tail -f ~/suddwatch/logs/launchd_stdout.log
-```
-
-### cron (alternative)
-
-```cron
-0 */12 * * * cd ~/suddwatch && venv/bin/python run_pipeline.py >> logs/pipeline.log 2>&1
-```
-
----
-
-## 14. Data Sources
-
-| Dataset | Provider | Resolution | Update |
-|---------|---------|------------|--------|
-| Sentinel-1 SAR | ESA Copernicus | 10 m | ~6 days |
-| CHIRPS Rainfall | UCSB / FEWS | 5 km | Daily |
-| Copernicus DEM | ESA / Copernicus | 30 m | Static |
-| WorldPop Population | WorldPop/Southampton | 100 m | Annual |
-| OSM Roads | OpenStreetMap | Vector | Continuous |
-| OSM Health Facilities | OpenStreetMap | Vector | Continuous |
-| OSM Villages | OpenStreetMap | Vector | Continuous |
-| Humanitarian Reports | ReliefWeb / OCHA | — | Continuous |
-
----
-
-## 15. Sprint History
-
-| Sprint | Deliverables | Status |
-|--------|-------------|--------|
-| **Sprint 1** | `config.py`, `database.py`, `data_acquisition.py`, `preprocessing.py`, 51 unit tests | ✅ Complete |
-| **Sprint 2** | `flood_detection.py`, `risk_assessment.py`, Streamlit dashboard (4 pages, SVG map) | ✅ Complete |
-| **Sprint 3** | `alerts.py` (SMS+Email confirmed), `pipeline.py`, `run_pipeline.py`, `CRON_SETUP.md`, 48 new tests | ✅ Complete |
-| **Sprint 4** | `ml_flood_detection.py` (Random Forest, OOB=0.9999), Intelligence Feed (ReliefWeb API — approved), `README.md` | ✅ Complete |
-
-**Total: 99/99 tests passing across all sprints.**
-
-### Post-Sprint UI Enhancements
-
-| Enhancement | Page | Description |
-|------------|------|-------------|
-| Satellite acquisition timeline | Home | Live 14-day Sentinel-1 pass history strip |
-| KPI sparklines | Home | Inline SVG trend lines on all 6 KPI cards |
-| Human cost annotation panel | Home | Priority locations with population counts below map |
-| Intelligence Feed (live) | Home | ReliefWeb API v2, approved appname, 9-card grid |
-| Season comparison toggle | History | Compare 2024 overlay on monthly bar chart |
-| State-specific mini-maps | History | Unique SVG per event showing affected state geography |
-| Stage duration heatmap | Performance | 4th tab — colour grid by stage × event, live DB data |
-| Export preview panel | Export | Live format preview before generating download |
-
----
-
-## 16. Academic Context
-
-| Field | Value |
-|-------|-------|
-| **Student** | Madut Chan (671336) |
-| **Course** | SWE3090 — Software Engineering Project |
-| **Semester** | Summer 2026 |
-| **Institution** | USIU-Africa |
-| **Repository** | https://github.com/Billawan12/suddwatch |
-
-### System Objectives
-
-1. ✅ Automated Sentinel-1 SAR scene acquisition from ESA Copernicus
-2. ✅ SNAP GPT preprocessing pipeline (calibration, terrain correction)
-3. ✅ 6-stage threshold-based flood detection algorithm
-4. ✅ Random Forest ML classifier with 11 SAR/texture features (OOB=0.9999)
-5. ✅ Humanitarian risk assessment (population, roads, health facilities)
-6. ✅ Dual-channel alert dispatch (SMS + email) with confirmed live connectivity
-7. ✅ Operational Streamlit dashboard with 4 pages, modern UX, live Intelligence Feed
-8. ✅ Automated scheduling via launchd/cron with 12-hour cadence
-9. ✅ 99 automated tests across all pipeline modules
-10. ✅ Live ReliefWeb API integration (approved appname: usiu-suddwatch-swe3090-2026)
-11. ✅ Satellite acquisition timeline, KPI sparklines, stage heatmap, export preview
-
-### Humanitarian Impact
-
-SuddWatch targets the **60-minute detection-to-alert SLA** — the threshold at which humanitarian organisations can activate pre-positioned emergency response before flood waters cut off road access. By automating what previously took 24–72 hours of manual satellite analysis and reporting, SuddWatch enables faster evacuation decisions, earlier food and shelter pre-positioning, and better documentation of flood patterns for predictive response planning.
-
----
-
-*SuddWatch is developed as part of SWE3090 at USIU-Africa, Summer 2026.*
-*Built with Python, Streamlit, ESA SNAP, Twilio, and ReliefWeb/OCHA data.*
+*SuddWatch — SWE3090 Software Project 1 · USIU-Africa · Summer Semester 2026*  
+*Madut Chan (671336) · Supervised by Prof. Paul Okanda*
