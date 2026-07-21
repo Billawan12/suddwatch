@@ -703,10 +703,10 @@ iframe{display:block!important;margin:0!important;padding:0!important;
     _is_light = st.session_state.get("sw_theme", "dark") == "light"
     if _is_light:
         _tok_map = [
-            ('__CA2__','#f0f2f5'),('__AC__','#0969da'),('__SU__','#1a7f37'),
+            ('__CA2__','#e8ebef'),('__AC__','#0969da'),('__SU__','#1a7f37'),
             ('__WA__','#9a6700'), ('__DA__','#cf222e'),('__BG__','#f6f8fa'),
-            ('__CA__','#ffffff'), ('__BO__','#d0d7de'),('__B2__','#c8d0d9'),
-            ('__TH__','#1c2128'), ('__TM__','#57606a'),('__TX__','#24292f'),
+            ('__CA__','#ffffff'), ('__BO__','#94a3b8'),('__B2__','#7a8a9e'),
+            ('__TH__','#1c2128'), ('__TM__','#3d4653'),('__TX__','#1c2128'),
         ]
     else:
         _tok_map = [
@@ -3515,17 +3515,17 @@ section[data-testid="stMain"] > div {{min-height:100vh;}}
                                               type="password")
                     _ru_sub   = st.form_submit_button("Submit request",
                                     width='stretch')
-                if _ru_sub:
-                    if not all([_ru_name, _ru_org, _ru_email, _ru_pw]):
-                        st.error("Please fill in all fields.")
-                    elif _ru_pw != _ru_pw2:
-                        st.error("Passwords do not match.")
-                    elif "@" not in _ru_email:
-                        st.error("Enter a valid email address.")
-                    else:
-                        st.success(
-                            f"Request submitted for {_ru_name} ({_ru_org}). "
-                            "An admin will activate your account within 24 hrs.")
+                    if _ru_sub:
+                        if not all([_ru_name, _ru_org, _ru_email, _ru_pw]):
+                            st.error("Please fill in all fields.")
+                        elif _ru_pw != _ru_pw2:
+                            st.error("Passwords do not match.")
+                        elif "@" not in _ru_email:
+                            st.error("Enter a valid email address.")
+                        else:
+                            st.success(
+                                f"Request submitted for {_ru_name} ({_ru_org}). "
+                                "An admin will activate your account within 24 hrs.")
 
             st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
             if st.button("← Back to home", key="sw_back",

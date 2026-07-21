@@ -8,7 +8,7 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 html{scroll-behavior:smooth;font-size:20px;}
-body{background:#0d1117;color:#c9d1d9;font-family:'Inter',system-ui,sans-serif;
+body{background:__BG__;color:__TX__;font-family:'Inter',system-ui,sans-serif;
   line-height:1.8;-webkit-font-smoothing:antialiased;}
 /* Light mode overrides — applied via JS when user toggles */
 html.light-mode body{background:#f6f8fa;color:#24292f;}
@@ -28,10 +28,10 @@ html.light-mode .feats{background:#f6f8fa!important;}
 html.light-mode .crisis{background:#f6f8fa!important;}
 html.light-mode .crisis-grid{border-color:#d0d7de!important;}
 html.light-mode .crisis-facts{background:#ffffff!important;border-color:#d0d7de!important;}
-html.light-mode .cf{border-color:#d0d7de!important;}
-html.light-mode .pc{background:#ffffff!important;border-color:#d0d7de!important;}
+html.light-mode .cf{border-color:__BO__!important;}
+html.light-mode .pc{background:__CA__;border:1px solid __BO__!important;}
 html.light-mode .tc{background:#ffffff!important;border-color:#d0d7de!important;}
-html.light-mode .prob-cards .pc{background:#f0f2f5!important;}
+html.light-mode .prob-cards .pc{background:__CA__;}
 html.light-mode .tech-grid .tc{background:#f0f2f5!important;}
 html.light-mode .sat-wrap{border-color:#d0d7de!important;}
 html.light-mode .img-cap{background:#f0f2f5!important;border-color:#d0d7de!important;}
@@ -59,9 +59,7 @@ html.light-mode .ft{background:#f0f2f5!important;border-color:#d0d7de!important;
 html.light-mode .nav-name,
 html.light-mode .section h2,html.light-mode .how-left h2,html.light-mode .how-right h2,
 html.light-mode .cta-section h2,
-html.light-mode h3,html.light-mode h4,
-html.light-mode .sv,html.light-mode .cf-v,
-html.light-mode .feat-t,html.light-mode .step-title,html.light-mode .tc h4,
+html.light-mode h3,html.light-mode .feat-t,html.light-mode .step-title,html.light-mode .tc h4,
 html.light-mode .wt,html.light-mode .astat-v,html.light-mode .scm-val,
 html.light-mode .kpi-v,html.light-mode .dkpi-v,html.light-mode .speed-text strong,
 html.light-mode .status-head h3{color:#1c2128!important;}
@@ -72,8 +70,7 @@ html.light-mode .hero-body h1 em{color:#7dd3fc!important;}
 html.light-mode .nav-sub,html.light-mode .nav-link,html.light-mode .section-sub,
 html.light-mode .how-sub,html.light-mode .step-desc,html.light-mode .step-note,
 html.light-mode .feat-d,html.light-mode .wd,html.light-mode .acard-tag,
-html.light-mode .sms-ts,html.light-mode .eline,html.light-mode .sl,
-html.light-mode .scm-sub,html.light-mode .scm-lbl,html.light-mode .sc-path,
+html.light-mode .sms-ts,html.light-mode .eline,html.light-mode .scm-sub,html.light-mode .scm-lbl,html.light-mode .sc-path,
 html.light-mode .sc-foot,html.light-mode .cf-l,html.light-mode .cf-s,
 html.light-mode .img-cap,html.light-mode .astat-l,html.light-mode .kpi-l,
 html.light-mode .dkpi-l,html.light-mode .dash-val,html.light-mode .dash-title,
@@ -86,7 +83,7 @@ html.light-mode .fc a:hover,html.light-mode .nav-link:hover{color:#1c2128!import
 
 /* Light mode — borders and dividers */
 html.light-mode .step{border-color:#d0d7de!important;}
-html.light-mode .sep{background:#d0d7de!important;}
+html.light-mode .sep{background:__BO__!important;}
 html.light-mode .scm-track{background:#e8ecf0!important;}
 html.light-mode .dash-line{background:#d0d7de!important;}
 html.light-mode .footer-grid,html.light-mode .footer-bottom{border-color:#d0d7de!important;}
@@ -106,33 +103,33 @@ html.light-mode .cta-s:hover{border-color:#0969da!important;color:#0969da!import
 
 
 /* GROUND SECTION */
-.ground-right{background:#161b22;padding:64px 48px;display:flex;flex-direction:column;justify-content:center;}
-.ground-item{display:flex;gap:18px;padding:20px 0;border-bottom:1px solid #21262d;}
+.ground-right{background:__CA__;padding:64px 48px;display:flex;flex-direction:column;justify-content:center;}
+.ground-item{display:flex;gap:18px;padding:20px 0;border-bottom:1px solid __BO__;}
 .ground-item:last-child{border-bottom:none;}
 .ground-icon{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 
 /* FLOOD SEASON */
-.flood-season-wrap{background:#111927;border-top:1px solid #21262d;border-bottom:1px solid #21262d;padding:48px;}
+.flood-season-wrap{background:__CA2__;border-top:1px solid __BO__;border-bottom:1px solid __BO__;padding:48px;}
 .flood-season-inner{max-width:940px;margin:0 auto;}
 
 
 /* News section */
-.news-bg{background:#0d1117;}
-.nc{background:#161b22;border:1px solid #21262d;border-radius:12px;
+.news-bg{background:__BG__;}
+.nc{background:__CA__;border:1px solid __BO__;border-radius:12px;
   overflow:hidden;display:flex;flex-direction:column;width:300px;flex-shrink:0;
   transition:transform .2s,box-shadow .2s,border-color .2s;}
 .nc:hover{transform:translateY(-6px);
-  box-shadow:0 16px 40px rgba(0,0,0,.35);border-color:#30363d;}
+  box-shadow:0 16px 40px rgba(0,0,0,.35);border-color:__B2__;}
 .nc-banner{height:140px;display:flex;align-items:center;
-  justify-content:center;border-bottom:1px solid #21262d;}
+  justify-content:center;border-bottom:1px solid __BO__;}
 .nc-body{padding:20px;flex:1;display:flex;flex-direction:column;}
 .nc-badge{font-family:'DM Mono',monospace;font-size:11px;font-weight:500;
   padding:3px 9px;border-radius:4px;}
-.nc-date{font-size:12px;color:#8b949e;}
-.nc-title{font-size:15px;font-weight:600;color:#f0f6fc;line-height:1.45;
+.nc-date{font-size:12px;color:__TM__;}
+.nc-title{font-size:15px;font-weight:600;color:__TH__;line-height:1.45;
   margin-bottom:10px;flex:1;}
-.nc-desc{font-size:13px;color:#8b949e;line-height:1.75;margin-bottom:16px;}
-.nc-link{font-size:13px;color:#0ea5e9;text-decoration:none;
+.nc-desc{font-size:13px;color:__TM__;line-height:1.75;margin-bottom:16px;}
+.nc-link{font-size:13px;color:__AC__;text-decoration:none;
   display:inline-flex;align-items:center;gap:5px;font-weight:500;margin-top:auto;}
 
 
@@ -168,30 +165,30 @@ html.light-mode .nc-link{color:#0969da!important;}
 html.light-mode .nc-banner{border-color:#d0d7de!important;}
 html.light-mode .nc-badge{opacity:.9;}
 /* NAV */
-nav{position:sticky;top:0;z-index:200;background:#161b22;
-  border-bottom:1px solid #21262d;height:58px;display:flex;
+nav{position:sticky;top:0;z-index:200;background:__CA__;
+  border-bottom:1px solid __BO__;height:58px;display:flex;
   align-items:center;justify-content:space-between;padding:0 48px;}
 .nav-brand{display:flex;align-items:center;gap:10px;text-decoration:none;}
 .nav-name{font-family:'Barlow Condensed',sans-serif;font-size:20px;
-  font-weight:700;color:#f0f6fc;letter-spacing:.06em;}
-.nav-div{width:1px;height:14px;background:#30363d;}
-.nav-sub{font-size:14px;color:#8b949e;}
+  font-weight:700;color:__TH__;letter-spacing:.06em;}
+.nav-div{width:1px;height:14px;background:__B2__;}
+.nav-sub{font-size:14px;color:__TM__;}
 .nav-links{display:flex;gap:2px;}
-.nav-link{font-size:16px;color:#8b949e;padding:6px 14px;border-radius:7px;
+.nav-link{font-size:16px;color:__TM__;padding:6px 14px;border-radius:7px;
   cursor:pointer;border:none;background:none;font-family:'Inter',sans-serif;
   transition:.15s;}
-.nav-link:hover{color:#f0f6fc;background:rgba(128,128,128,.08);}
+.nav-link:hover{color:__TH__;background:rgba(128,128,128,.08);}
 .nav-cta{display:flex;gap:8px;margin-left:8px;align-items:center;}
-.theme-btn{width:36px;height:36px;border-radius:8px;border:1px solid #21262d;
+.theme-btn{width:36px;height:36px;border-radius:8px;border:1px solid __BO__;
   background:none;cursor:pointer;display:flex;align-items:center;
-  justify-content:center;color:#8b949e;transition:.15s;font-size:16px;}
-.theme-btn:hover{border-color:#0ea5e9;color:#0ea5e9;}
-.btn-outline{font-size:16px;color:#c9d1d9;padding:7px 18px;border-radius:7px;
-  border:1px solid #30363d;background:none;cursor:pointer;
+  justify-content:center;color:__TM__;transition:.15s;font-size:16px;}
+.theme-btn:hover{border-color:__AC__;color:__AC__;}
+.btn-outline{font-size:16px;color:__TX__;padding:7px 18px;border-radius:7px;
+  border:1px solid __B2__;background:none;cursor:pointer;
   font-family:'Inter',sans-serif;transition:.15s;}
-.btn-outline:hover{border-color:#0ea5e9;color:#0ea5e9;}
+.btn-outline:hover{border-color:__AC__;color:__AC__;}
 .btn-primary{font-size:16px;font-weight:500;color:#fff;padding:7px 18px;
-  border-radius:7px;border:none;background:#0ea5e9;cursor:pointer;
+  border-radius:7px;border:none;background:__AC__;cursor:pointer;
   font-family:'Inter',sans-serif;transition:.15s;}
 .btn-primary:hover{opacity:.88;}
 
@@ -217,7 +214,7 @@ nav{position:sticky;top:0;z-index:200;background:#161b22;
 .hero-body p{font-size:20px;color:rgba(255,255,255,.8);line-height:1.8;
   max-width:560px;margin-bottom:36px;font-weight:300;}
 .hero-btns{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;}
-.hero-btn-p{background:#0ea5e9;color:#fff;font-size:17px;font-weight:600;
+.hero-btn-p{background:__AC__;color:#fff;font-size:17px;font-weight:600;
   padding:14px 36px;border-radius:9px;border:none;cursor:pointer;
   font-family:'Inter',sans-serif;transition:.2s;}
 .hero-btn-p:hover{opacity:.88;transform:translateY(-1px);}
@@ -231,28 +228,28 @@ nav{position:sticky;top:0;z-index:200;background:#161b22;
 
 /* STAT BAR */
 .stat-bar{display:grid;grid-template-columns:repeat(4,1fr);
-  background:#161b22;border-bottom:1px solid #21262d;}
-.si{padding:16px 12px;border-right:1px solid #21262d;text-align:center;min-width:0;overflow:hidden;flex:1;}
+  background:__CA__;border-bottom:1px solid __BO__;}
+.si{padding:16px 12px;border-right:1px solid __BO__;text-align:center;min-width:0;overflow:hidden;flex:1;}
 .si:last-child{border-right:none;}
 .sv{font-family:'Barlow Condensed',sans-serif;font-size:clamp(16px,2vw,30px);
   font-weight:700;line-height:1;margin-bottom:4px;white-space:nowrap;}
-.sl{font-size:clamp(11px,1.1vw,14px);color:#8b949e;line-height:1.5;}
+.sl{font-size:clamp(11px,1.1vw,14px);color:__TM__;line-height:1.5;font-size:14px;}
 
 /* SECTIONS */
 .section{padding:80px 48px;scroll-margin-top:70px;}
 .section-inner{max-width:940px;margin:0 auto;}
-.eyebrow{font-family:'DM Mono',monospace;font-size:11px;color:#0ea5e9;
+.eyebrow{font-family:'DM Mono',monospace;font-size:11px;color:__AC__;
   letter-spacing:.14em;text-transform:uppercase;margin-bottom:14px;}
 .section h2{font-family:'Barlow Condensed',sans-serif;
-  font-size:clamp(28px,4.5vw,46px);font-weight:700;color:#f0f6fc;
+  font-size:clamp(28px,4.5vw,46px);font-weight:700;color:__TH__;
   letter-spacing:.02em;line-height:1.08;margin-bottom:16px;}
-.section-sub{font-size:18px;color:#8b949e;line-height:1.85;
-  max-width:560px;margin-bottom:48px;}
-.sep{height:1px;background:#21262d;}
+.section-sub{font-size:19px;color:__TX__;line-height:1.85;
+  max-width:600px;margin-bottom:48px;}
+.sep{height:1px;background:__BO__;}
 
 /* CRISIS */
 .crisis-grid{display:grid;grid-template-columns:1fr 1fr;
-  border:1px solid #21262d;border-radius:14px;overflow:hidden;margin-bottom:40px;}
+  border:1px solid __BO__;border-radius:14px;overflow:hidden;margin-bottom:40px;}
 .crisis-img{position:relative;overflow:hidden;}
 .crisis-img img{width:100%;height:100%;min-height:460px;
   object-fit:cover;object-position:center 30%;display:block;filter:brightness(.62);}
@@ -260,96 +257,96 @@ nav{position:sticky;top:0;z-index:200;background:#161b22;
   padding:22px;background:linear-gradient(transparent,rgba(0,0,0,.78));}
 .crisis-cap p{font-size:14px;color:rgba(255,255,255,.85);line-height:1.6;}
 .crisis-cap .source{font-size:11px;color:rgba(255,255,255,.5);margin-top:5px;}
-.crisis-facts{background:#111927;}
-.cf{padding:26px 30px;border-bottom:1px solid #21262d;}
+.crisis-facts{background:__CA2__;}
+.cf{padding:26px 30px;border-bottom:1px solid __BO__;}
 .cf:last-child{border-bottom:none;}
 .cf-v{font-family:'Barlow Condensed',sans-serif;font-size:34px;
   font-weight:700;line-height:1;margin-bottom:7px;}
-.cf-l{font-size:16px;color:#8b949e;line-height:1.7;}
-.cf-s{font-size:11px;color:#8b949e;margin-top:5px;opacity:.65;font-style:italic;}
+.cf-l{font-size:17px;color:__TX__;line-height:1.75;}
+.cf-s{font-size:11px;color:__TM__;margin-top:5px;opacity:.65;font-style:italic;}
 
 /* PROBLEM CARDS */
 .prob-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
-.pc{background:#161b22;border:1px solid #21262d;border-radius:12px;padding:24px;}
+.pc{background:__CA__;border:1px solid __BO__;border-radius:12px;padding:24px;}
 .pc-icon{width:40px;height:40px;border-radius:10px;
   background:rgba(239,68,68,.1);display:flex;align-items:center;
   justify-content:center;margin-bottom:14px;}
-.pc-icon i{font-size:22px;color:#ef4444;}
-.pc h4{font-size:18px;font-weight:600;color:#f0f6fc;margin-bottom:8px;}
-.pc p{font-size:17px;color:#8b949e;line-height:1.85;}
+.pc-icon i{font-size:22px;color:__DA__;}
+.pc h4{font-size:18px;font-weight:600;color:__TH__;margin-bottom:8px;}
+.pc p{font-size:17px;color:__TM__;line-height:1.85;}
 
 /* HOW IT WORKS */
-.how-wrap{background:#161b22;border-top:1px solid #21262d;border-bottom:1px solid #21262d;scroll-margin-top:70px;}
+.how-wrap{background:__CA__;border-top:1px solid __BO__;border-bottom:1px solid __BO__;scroll-margin-top:70px;}
 .how-grid{display:grid;grid-template-columns:1fr 1fr;max-width:100%;}
-.how-left{padding:56px 48px;border-right:1px solid #21262d;}
+.how-left{padding:56px 48px;border-right:1px solid __BO__;}
 .how-right{padding:80px 56px;}
 .how-left h2{font-family:'Barlow Condensed',sans-serif;
-  font-size:clamp(26px,4vw,42px);font-weight:700;color:#f0f6fc;
+  font-size:clamp(26px,4vw,42px);font-weight:700;color:__TH__;
   letter-spacing:.02em;line-height:1.08;margin-bottom:16px;}
-.how-sub{font-size:18px;color:#8b949e;line-height:1.85;margin-bottom:32px;}
-.sat-wrap{border-radius:12px;overflow:hidden;border:1px solid #21262d;margin-top:8px;}
+.how-sub{font-size:18px;color:__TM__;line-height:1.85;margin-bottom:32px;}
+.sat-wrap{border-radius:12px;overflow:hidden;border:1px solid __BO__;margin-top:8px;}
 .sat-img{width:100%;height:620px;object-fit:cover;display:block;object-position:center 35%;}
-.img-cap{font-size:15px;color:#8b949e;line-height:1.6;padding:12px 16px;
-  background:#0d1117;border:1px solid #21262d;border-top:none;
+.img-cap{font-size:15px;color:__TM__;line-height:1.6;padding:12px 16px;
+  background:__BG__;border:1px solid __BO__;border-top:none;
   border-radius:0 0 12px 12px;}
 .steps{display:flex;flex-direction:column;}
-.step{display:flex;gap:18px;padding:22px 0;border-bottom:1px solid #21262d;}
+.step{display:flex;gap:18px;padding:22px 0;border-bottom:1px solid __BO__;}
 .step:last-child{border-bottom:none;padding-bottom:0;}
 .step-icon{width:38px;height:38px;border-radius:10px;flex-shrink:0;
-  background:rgba(14,165,233,.1);color:#0ea5e9;
+  background:rgba(14,165,233,.1);color:__AC__;
   display:flex;align-items:center;justify-content:center;margin-top:2px;}
 .step-icon i{font-size:19px;}
-.step-title{font-size:18px;font-weight:600;color:#f0f6fc;margin-bottom:5px;}
-.step-desc{font-size:17px;color:#8b949e;line-height:1.85;}
-.step-note{font-size:13px;color:#8b949e;margin-top:5px;font-style:italic;opacity:.75;}
+.step-title{font-size:18px;font-weight:600;color:__TH__;margin-bottom:5px;}
+.step-desc{font-size:17px;color:__TM__;line-height:1.85;}
+.step-note{font-size:13px;color:__TM__;margin-top:5px;font-style:italic;opacity:.75;}
 .speed-row{margin-top:28px;padding:16px 20px;
   background:rgba(14,165,233,.07);border:1px solid rgba(14,165,233,.18);
   border-radius:10px;display:flex;justify-content:space-between;
   align-items:center;gap:12px;flex-wrap:wrap;}
-.speed-text{font-size:15px;color:#0ea5e9;font-weight:500;}
-.speed-b{font-family:'DM Mono',monospace;font-size:12px;color:#0ea5e9;
+.speed-text{font-size:15px;color:__AC__;font-weight:500;}
+.speed-b{font-family:'DM Mono',monospace;font-size:12px;color:__AC__;
   border:1px solid rgba(14,165,233,.25);border-radius:5px;padding:4px 12px;}
 
 /* LIVE STATUS */
-.status-wrap{padding:64px 48px;background:#0d1117;border-bottom:1px solid #21262d;}
-.news-bg{background:#0d1117;}
+.status-wrap{padding:64px 48px;background:__BG__;border-bottom:1px solid __BO__;}
+.news-bg{background:__BG__;}
 .status-inner{max-width:940px;margin:0 auto;}
 .status-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
-.status-head h3{font-size:15px;font-weight:500;color:#f0f6fc;}
-.sc-live{font-family:'DM Mono',monospace;font-size:12px;color:#22c55e;
+.status-head h3{font-size:15px;font-weight:500;color:__TH__;}
+.sc-live{font-family:'DM Mono',monospace;font-size:12px;color:__SU__;
   display:flex;align-items:center;gap:7px;}
-.sc-live-dot{width:6px;height:6px;border-radius:50%;background:#22c55e;}
-.sc-card{background:#111927;border:1px solid #21262d;border-radius:14px;overflow:hidden;}
-.sc-bar{background:#161b22;border-bottom:1px solid #21262d;padding:10px 20px;
+.sc-live-dot{width:6px;height:6px;border-radius:50%;background:__SU__;}
+.sc-card{background:__CA2__;border:1px solid __BO__;border-radius:14px;overflow:hidden;}
+.sc-bar{background:__CA__;border-bottom:1px solid __BO__;padding:10px 20px;
   display:flex;align-items:center;gap:10px;}
 .sc-dots{display:flex;gap:6px;}
 .sc-dots span{width:10px;height:10px;border-radius:50%;}
-.sc-path{font-family:'DM Mono',monospace;font-size:13px;color:#8b949e;
+.sc-path{font-family:'DM Mono',monospace;font-size:13px;color:__TM__;
   flex:1;text-align:center;}
 .sc-grid{display:grid;grid-template-columns:repeat(3,1fr);}
-.scm{padding:24px 28px;border-right:1px solid #21262d;}
+.scm{padding:24px 28px;border-right:1px solid __BO__;}
 .scm:last-child{border-right:none;}
-.scm-lbl{font-family:'DM Mono',monospace;font-size:10px;color:#8b949e;
+.scm-lbl{font-family:'DM Mono',monospace;font-size:10px;color:__TM__;
   letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;}
 .scm-val{font-family:'Barlow Condensed',sans-serif;font-size:32px;
   font-weight:700;line-height:1;margin-bottom:5px;}
-.scm-sub{font-size:15px;color:#8b949e;}
-.scm-track{height:3px;background:#30363d;border-radius:2px;margin-top:14px;overflow:hidden;}
+.scm-sub{font-size:15px;color:__TM__;}
+.scm-track{height:3px;background:__B2__;border-radius:2px;margin-top:14px;overflow:hidden;}
 .scm-fill{height:100%;border-radius:2px;}
-.sc-foot{padding:12px 24px;border-top:1px solid #21262d;font-size:15px;
-  color:#8b949e;display:flex;gap:20px;flex-wrap:wrap;align-items:center;}
+.sc-foot{padding:12px 24px;border-top:1px solid __BO__;font-size:15px;
+  color:__TM__;display:flex;gap:20px;flex-wrap:wrap;align-items:center;}
 .sc-foot i{font-size:15px;vertical-align:-2px;margin-right:4px;}
 
 /* TECH */
 .tech-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
-.tc{background:#161b22;border:1px solid #21262d;border-radius:12px;padding:26px;}
+.tc{background:__CA__;border:1px solid __BO__;border-radius:12px;padding:26px;}
 .tc-head{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
 .tc-icon{width:38px;height:38px;border-radius:9px;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;}
 .tc-icon i{font-size:20px;}
-.tc h4{font-size:18px;font-weight:600;color:#f0f6fc;}
-.tc p{font-size:17px;color:#8b949e;line-height:1.85;}
-.tc a{font-size:13px;font-family:'DM Mono',monospace;font-size:12px;color:#0ea5e9;
+.tc h4{font-size:18px;font-weight:600;color:__TH__;}
+.tc p{font-size:17px;color:__TM__;line-height:1.85;}
+.tc a{font-size:13px;font-family:'DM Mono',monospace;font-size:12px;color:__AC__;
   text-decoration:none;display:inline-flex;align-items:center;
   gap:5px;margin-top:10px;}
 
@@ -367,99 +364,99 @@ nav{position:sticky;top:0;z-index:200;background:#161b22;
 .alert-overlay p{font-size:16px;color:rgba(255,255,255,.8);
   max-width:520px;line-height:1.8;}
 .cards-row{display:grid;grid-template-columns:repeat(3,1fr);
-  border-top:1px solid #21262d;}
-.acard{padding:32px;border-right:1px solid #21262d;background:#0d1117;}
+  border-top:1px solid __BO__;}
+.acard{padding:32px;border-right:1px solid __BO__;background:__BG__;}
 .acard:last-child{border-right:none;}
 .acard-tag{display:flex;align-items:center;gap:9px;
-  font-family:'DM Mono',monospace;font-size:12px;color:#8b949e;
+  font-family:'DM Mono',monospace;font-size:12px;color:__TM__;
   letter-spacing:.08em;text-transform:uppercase;margin-bottom:18px;}
-.acard-tag i{font-size:18px;color:#0ea5e9;}
+.acard-tag i{font-size:18px;color:__AC__;}
 .sms-bub{background:rgba(14,165,233,.09);border:1px solid rgba(14,165,233,.15);
   border-radius:12px;padding:16px 18px;margin-bottom:14px;}
-.sms-from{font-family:'DM Mono',monospace;font-size:10px;color:#0ea5e9;margin-bottom:7px;}
-.sms-text{font-size:16px;color:#c9d1d9;line-height:1.75;}
-.sms-ts{font-size:11px;color:#8b949e;text-align:right;margin-top:7px;}
-.acard-note{font-size:16px;color:#22c55e;line-height:1.9;}
+.sms-from{font-family:'DM Mono',monospace;font-size:10px;color:__AC__;margin-bottom:7px;}
+.sms-text{font-size:16px;color:__TX__;line-height:1.75;}
+.sms-ts{font-size:11px;color:__TM__;text-align:right;margin-top:7px;}
+.acard-note{font-size:16px;color:__SU__;line-height:1.9;}
 .acard-note div{display:flex;align-items:center;gap:7px;margin-bottom:4px;}
 .acard-note i{font-size:15px;flex-shrink:0;}
 .kpis{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:14px;}
-.kpi{background:#161b22;border:1px solid #21262d;border-radius:9px;padding:12px 14px;}
+.kpi{background:__CA__;border:1px solid __BO__;border-radius:9px;padding:12px 14px;}
 .kpi-v{font-family:'Barlow Condensed',sans-serif;font-size:24px;
   font-weight:700;margin-bottom:3px;}
-.kpi-l{font-size:12px;color:#8b949e;}
-.eline{font-size:16px;color:#8b949e;padding:8px 0;
-  border-bottom:1px solid #21262d;line-height:1.5;
+.kpi-l{font-size:12px;color:__TM__;}
+.eline{font-size:16px;color:__TM__;padding:8px 0;
+  border-bottom:1px solid __BO__;line-height:1.5;
   display:flex;align-items:center;gap:8px;}
 .eline:last-child{border-bottom:none;}
 .eline i{font-size:14px;flex-shrink:0;}
-.dash-prev{background:#161b22;border:1px solid #21262d;border-radius:12px;overflow:hidden;}
-.dash-bar{background:#111927;border-bottom:1px solid #21262d;padding:9px 14px;
+.dash-prev{background:__CA__;border:1px solid __BO__;border-radius:12px;overflow:hidden;}
+.dash-bar{background:__CA2__;border-bottom:1px solid __BO__;padding:9px 14px;
   display:flex;align-items:center;gap:8px;}
 .dash-dots{display:flex;gap:5px;}
 .dash-dots span{width:9px;height:9px;border-radius:50%;}
 .dash-title{font-family:'DM Mono',monospace;font-size:11px;
-  color:#8b949e;flex:1;text-align:center;}
+  color:__TM__;flex:1;text-align:center;}
 .dash-body{padding:14px;}
 .dkpis{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:10px;}
-.dkpi{background:#111927;border-radius:6px;padding:9px 11px;border:1px solid #21262d;}
+.dkpi{background:__CA2__;border-radius:6px;padding:9px 11px;border:1px solid __BO__;}
 .dkpi-v{font-family:'Barlow Condensed',sans-serif;font-size:16px;
   font-weight:700;margin-bottom:2px;}
-.dkpi-l{font-size:10px;color:#8b949e;}
-.dash-map{background:#111927;border-radius:6px;border:1px solid #21262d;
+.dkpi-l{font-size:10px;color:__TM__;}
+.dash-map{background:__CA2__;border-radius:6px;border:1px solid __BO__;
   height:86px;margin-bottom:8px;overflow:hidden;}
 .dash-rows{display:flex;flex-direction:column;gap:5px;}
-.dash-row{background:#111927;border-radius:5px;height:24px;
-  display:flex;align-items:center;padding:0 11px;gap:9px;border:1px solid #21262d;}
+.dash-row{background:__CA2__;border-radius:5px;height:24px;
+  display:flex;align-items:center;padding:0 11px;gap:9px;border:1px solid __BO__;}
 .dash-dot{width:7px;height:7px;border-radius:50%;}
-.dash-line{flex:1;height:1.5px;background:#30363d;border-radius:1px;}
-.dash-val{font-family:'DM Mono',monospace;font-size:10px;color:#8b949e;}
+.dash-line{flex:1;height:1.5px;background:__B2__;border-radius:1px;}
+.dash-val{font-family:'DM Mono',monospace;font-size:10px;color:__TM__;}
 .alert-stats{display:grid;grid-template-columns:repeat(4,1fr);
-  background:#161b22;border-top:1px solid #21262d;}
-.astat{padding:24px 28px;border-right:1px solid #21262d;text-align:center;}
+  background:__CA__;border-top:1px solid __BO__;}
+.astat{padding:24px 28px;border-right:1px solid __BO__;text-align:center;}
 .astat:last-child{border-right:none;}
 .astat-v{font-family:'Barlow Condensed',sans-serif;font-size:22px;
-  font-weight:700;color:#f0f6fc;margin-bottom:5px;}
-.astat-l{font-size:15px;color:#8b949e;line-height:1.5;}
+  font-weight:700;color:__TH__;margin-bottom:5px;}
+.astat-l{font-size:15px;color:__TM__;line-height:1.5;}
 
 /* NEWS SECTION */
-.news-section{background:#0d1117;border-top:1px solid #21262d;border-bottom:1px solid #21262d;}
+.news-section{background:__BG__;border-top:1px solid __BO__;border-bottom:1px solid __BO__;}
 .news-h2{font-family:'Barlow Condensed',sans-serif;font-size:clamp(28px,4.5vw,46px);
-  font-weight:700;color:#f0f6fc;letter-spacing:.02em;line-height:1.08;margin-bottom:0;}
-.news-link-btn{font-family:'DM Mono',monospace;font-size:13px;color:#0ea5e9;
+  font-weight:700;color:__TH__;letter-spacing:.02em;line-height:1.08;margin-bottom:0;}
+.news-link-btn{font-family:'DM Mono',monospace;font-size:13px;color:__AC__;
   text-decoration:none;display:inline-flex;align-items:center;gap:6px;
   white-space:nowrap;padding:10px 18px;border:1px solid rgba(14,165,233,.25);
   border-radius:8px;transition:.15s;}
 .news-link-btn:hover{background:rgba(14,165,233,.07);}
 .news-scroll-wrap{overflow-x:auto;overflow-y:visible;padding:0 48px 24px;
-  scrollbar-width:thin;scrollbar-color:#21262d transparent;
+  scrollbar-width:thin;scrollbar-color:__BO__ transparent;
   -webkit-overflow-scrolling:touch;}
 .news-scroll-wrap::-webkit-scrollbar{height:4px;}
 .news-scroll-wrap::-webkit-scrollbar-track{background:transparent;}
-.news-scroll-wrap::-webkit-scrollbar-thumb{background:#21262d;border-radius:2px;}
+.news-scroll-wrap::-webkit-scrollbar-thumb{background:__BO__;border-radius:2px;}
 .news-row{display:flex;gap:16px;width:max-content;padding-bottom:8px;}
-.news-card{width:300px;flex-shrink:0;background:#161b22;border:1px solid #21262d;
+.news-card{width:300px;flex-shrink:0;background:__CA__;border:1px solid __BO__;
   border-radius:12px;overflow:hidden;display:flex;flex-direction:column;
   transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease;
   cursor:default;}
 .news-card:hover{transform:translateY(-6px);
-  box-shadow:0 12px 32px rgba(0,0,0,.25);border-color:#30363d;}
+  box-shadow:0 12px 32px rgba(0,0,0,.25);border-color:__B2__;}
 .news-card-banner{height:140px;display:flex;align-items:center;
-  justify-content:center;border-bottom:1px solid #21262d;}
+  justify-content:center;border-bottom:1px solid __BO__;}
 .news-card-body{padding:20px;flex:1;display:flex;flex-direction:column;gap:0;}
 .news-card-meta{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
 .news-badge{font-family:'DM Mono',monospace;font-size:11px;font-weight:500;
   padding:3px 9px;border-radius:4px;letter-spacing:.04em;}
-.news-date{font-size:13px;color:#8b949e;}
-.news-card-title{font-size:15px;font-weight:600;color:#f0f6fc;line-height:1.45;
+.news-date{font-size:13px;color:__TM__;}
+.news-card-title{font-size:15px;font-weight:600;color:__TH__;line-height:1.45;
   margin-bottom:10px;flex:1;}
-.news-card-desc{font-size:14px;color:#8b949e;line-height:1.75;margin-bottom:14px;}
-.news-read-more{font-size:14px;color:#0ea5e9;text-decoration:none;
+.news-card-desc{font-size:14px;color:__TM__;line-height:1.75;margin-bottom:14px;}
+.news-read-more{font-size:14px;color:__AC__;text-decoration:none;
   display:inline-flex;align-items:center;gap:5px;margin-top:auto;}
 .news-read-more:hover{text-decoration:underline;}
 .news-source-note{display:flex;align-items:center;gap:10px;font-size:14px;
-  color:#8b949e;padding:14px 18px;background:rgba(14,165,233,.06);
+  color:__TM__;padding:14px 18px;background:rgba(14,165,233,.06);
   border:1px solid rgba(14,165,233,.15);border-radius:8px;flex-wrap:wrap;}
-.news-signin-link{color:#0ea5e9;text-decoration:none;white-space:nowrap;
+.news-signin-link{color:__AC__;text-decoration:none;white-space:nowrap;
   margin-left:auto;}
 .news-signin-link:hover{text-decoration:underline;}
 
@@ -487,80 +484,80 @@ html.light-mode .news-signin-link{color:#0969da!important;}
 
 /* FEATURES */
 .feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
-.feat{background:#161b22;border:1px solid #21262d;border-radius:12px;padding:26px;
+.feat{background:__CA__;border:1px solid __BO__;border-radius:12px;padding:26px;
   transition:border-color .15s;}
-.feat:hover{border-color:#30363d;}
+.feat:hover{border-color:__B2__;}
 .feat-icon{width:40px;height:40px;border-radius:10px;
   background:rgba(14,165,233,.1);display:flex;align-items:center;
   justify-content:center;margin-bottom:16px;}
-.feat-icon i{font-size:22px;color:#0ea5e9;}
-.feat-t{font-size:18px;font-weight:600;color:#f0f6fc;margin-bottom:8px;}
-.feat-d{font-size:17px;color:#8b949e;line-height:1.85;}
+.feat-icon i{font-size:22px;color:__AC__;}
+.feat-t{font-size:18px;font-weight:600;color:__TH__;margin-bottom:8px;}
+.feat-d{font-size:17px;color:__TM__;line-height:1.85;}
 
 /* WHO USES */
 .who-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
-.wc{background:#161b22;border:1px solid #21262d;border-radius:12px;
+.wc{background:__CA__;border:1px solid __BO__;border-radius:12px;
   padding:24px 24px 24px 28px;position:relative;overflow:hidden;}
 .ws{position:absolute;top:0;left:0;width:3px;height:100%;}
-.wo{font-family:'DM Mono',monospace;font-size:12px;color:#8b949e;
+.wo{font-family:'DM Mono',monospace;font-size:12px;color:__TM__;
   letter-spacing:.08em;text-transform:uppercase;margin-bottom:9px;}
-.wt{font-size:18px;font-weight:600;color:#f0f6fc;margin-bottom:8px;}
-.wd{font-size:17px;color:#8b949e;line-height:1.85;}
+.wt{font-size:18px;font-weight:600;color:__TH__;margin-bottom:8px;}
+.wd{font-size:17px;color:__TM__;line-height:1.85;}
 
 /* CTA */
-.cta-section{padding:100px 48px;text-align:center;background:#161b22;}
+.cta-section{padding:100px 48px;text-align:center;background:__CA__;}
 .cta-section h2{font-family:'Barlow Condensed',sans-serif;
-  font-size:clamp(34px,5.5vw,62px);font-weight:700;color:#f0f6fc;
+  font-size:clamp(34px,5.5vw,62px);font-weight:700;color:__TH__;
   letter-spacing:.02em;line-height:1.05;margin-bottom:16px;}
-.cta-section p{font-size:20px;color:#8b949e;max-width:440px;
+.cta-section p{font-size:20px;color:__TM__;max-width:440px;
   margin:0 auto 32px;line-height:1.85;}
 .cta-btns{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;}
-.cta-p{background:#0ea5e9;color:#fff;font-size:18px;font-weight:600;
+.cta-p{background:__AC__;color:#fff;font-size:18px;font-weight:600;
   padding:14px 36px;border-radius:9px;border:none;cursor:pointer;
   font-family:'Inter',sans-serif;transition:.2s;}
 .cta-p:hover{opacity:.88;}
-.cta-s{background:#0d1117;color:#c9d1d9;font-size:18px;padding:14px 36px;
-  border-radius:9px;border:1px solid #30363d;cursor:pointer;
+.cta-s{background:__BG__;color:__TX__;font-size:18px;padding:14px 36px;
+  border-radius:9px;border:1px solid __B2__;cursor:pointer;
   font-family:'Inter',sans-serif;transition:.2s;}
-.cta-s:hover{border-color:#0ea5e9;color:#0ea5e9;}
-.cta-note{margin-top:22px;font-size:13px;color:#8b949e;}
-.cta-note a{color:#0ea5e9;text-decoration:none;}
+.cta-s:hover{border-color:__AC__;color:__AC__;}
+.cta-note{margin-top:22px;font-size:13px;color:__TM__;}
+.cta-note a{color:__AC__;text-decoration:none;}
 .cta-note a:hover{text-decoration:underline;}
 
 /* FOOTER */
-footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
+footer{background:__BG__;border-top:1px solid __BO__;padding:60px 48px 28px;}
 .footer-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;
   gap:40px;margin-bottom:48px;}
-.fb p{font-size:16px;color:#8b949e;line-height:1.85;margin-top:12px;max-width:280px;}
-.fc h5{font-family:'DM Mono',monospace;font-size:10px;color:#8b949e;
+.fb p{font-size:16px;color:__TM__;line-height:1.85;margin-top:12px;max-width:280px;}
+.fc h5{font-family:'DM Mono',monospace;font-size:10px;color:__TM__;
   letter-spacing:.1em;text-transform:uppercase;margin-bottom:16px;}
-.fc a{display:block;font-size:16px;color:#8b949e;margin-bottom:10px;
+.fc a{display:block;font-size:16px;color:__TM__;margin-bottom:10px;
   text-decoration:none;transition:.15s;}
-.fc a:hover{color:#f0f6fc;}
+.fc a:hover{color:__TH__;}
 .partner-logos{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;}
-.pb{display:inline-flex;align-items:center;gap:6px;background:#161b22;
-  border:1px solid #21262d;border-radius:6px;padding:6px 11px;
-  font-size:12px;font-weight:500;color:#8b949e;}
-.pb i{font-size:14px;color:#0ea5e9;}
-.footer-bottom{border-top:1px solid #21262d;padding-top:22px;
+.pb{display:inline-flex;align-items:center;gap:6px;background:__CA__;
+  border:1px solid __BO__;border-radius:6px;padding:6px 11px;
+  font-size:12px;font-weight:500;color:__TM__;}
+.pb i{font-size:14px;color:__AC__;}
+.footer-bottom{border-top:1px solid __BO__;padding-top:22px;
   display:flex;justify-content:space-between;align-items:center;
   flex-wrap:wrap;gap:12px;}
-.fbl{font-size:15px;color:#8b949e;}
+.fbl{font-size:15px;color:__TM__;}
 .footer-tags{display:flex;gap:7px;flex-wrap:wrap;}
-.ft{font-family:'DM Mono',monospace;font-size:10px;color:#8b949e;
-  background:#161b22;border:1px solid #21262d;border-radius:4px;padding:3px 8px;}
+.ft{font-family:'DM Mono',monospace;font-size:10px;color:__TM__;
+  background:__CA__;border:1px solid __BO__;border-radius:4px;padding:3px 8px;}
 
 /* RESPONSIVE */
 @media(max-width:960px){
   .crisis-grid,.how-grid,.cards-row,.who-grid,.footer-grid{grid-template-columns:1fr;}
-  .how-left{border-right:none;border-bottom:1px solid #21262d;padding:56px 24px;}
+  .how-left{border-right:none;border-bottom:1px solid __BO__;padding:56px 24px;}
   .how-right{padding:56px 24px;}
   .feat-grid,.prob-cards,.tech-grid{grid-template-columns:1fr 1fr;}
   .stat-bar{grid-template-columns:repeat(4,1fr);}
   .alert-stats{grid-template-columns:1fr 1fr;}
   .astat:nth-child(2){border-right:none;}
-  .astat:nth-child(3){border-top:1px solid #21262d;}
-  .acard{border-right:none;border-bottom:1px solid #21262d;}
+  .astat:nth-child(3){border-top:1px solid __BO__;}
+  .acard{border-right:none;border-bottom:1px solid __BO__;}
   .acard:last-child{border-bottom:none;}
   nav{padding:0 20px;}
   .nav-div,.nav-sub,.nav-links{display:none;}
@@ -574,10 +571,21 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
   .footer-grid{grid-template-columns:1fr 1fr;}
   .kpis{grid-template-columns:1fr 1fr;}
   .sc-grid{grid-template-columns:1fr;}
-  .scm{border-right:none;border-bottom:1px solid #21262d;}
+  .scm{border-right:none;border-bottom:1px solid __BO__;}
   .scm:last-child{border-bottom:none;}
 }
 </style>
+<script>
+// Set light-mode class based on background token colour
+// If __BG__ was replaced with a light colour, add light-mode class
+(function(){
+  var bg = "__BG__";
+  // Light colours start with #f or #e
+  if(bg.match(/^#[ef]/i)){
+    document.documentElement.classList.add("light-mode");
+  }
+})();
+</script>
 </head>
 <body>
 
@@ -585,8 +593,8 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
 <nav>
   <div class="nav-brand">
     <svg width="26" height="26" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-      <path d="M14 4C14 4 8 11 8 16C8 19.3 10.7 22 14 22C17.3 22 20 19.3 20 16C20 11 14 4 14 4Z" fill="#0ea5e9" opacity=".9"/>
-      <path d="M3 23Q7 19.5 11 23Q15 26.5 19 23Q23 19.5 27 23" fill="none" stroke="#0ea5e9" stroke-width="1.6" stroke-linecap="round" opacity=".6"/>
+      <path d="M14 4C14 4 8 11 8 16C8 19.3 10.7 22 14 22C17.3 22 20 19.3 20 16C20 11 14 4 14 4Z" fill="__AC__" opacity=".9"/>
+      <path d="M3 23Q7 19.5 11 23Q15 26.5 19 23Q23 19.5 27 23" fill="none" stroke="__AC__" stroke-width="1.6" stroke-linecap="round" opacity=".6"/>
     </svg>
     <span class="nav-name">SUDDWATCH</span>
     <div class="nav-div"></div>
@@ -601,8 +609,8 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
     <button class="theme-btn" id="themeToggleBtn" onclick="window.__suddTheme()" title="Toggle theme">
       <i class="ti ti-sun"></i>
     </button>
-    <button class="btn-outline" onclick="window.location.href='/?sw_go=signin';">Sign up</button>
-    <button class="btn-primary" onclick="window.location.href='/?sw_go=signin';">Sign in</button>
+    <button class="btn-outline" onclick="window.parent.postMessage({cmd:'signin'}, '*');">Sign up</button>
+    <button class="btn-primary" onclick="window.parent.postMessage({cmd:'signin'}, '*');">Sign in</button>
   </div>
 </nav>
 
@@ -616,88 +624,331 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
     <h1>Floods detected.<br><em>Alerts delivered.</em><br>Under 60 minutes.</h1>
     <p>SuddWatch uses ESA Sentinel-1 radar satellite imagery to automatically detect flooding across Greater Upper Nile &mdash; reaching village chiefs, field workers, and UN coordinators before evacuation windows close.</p>
     <div class="hero-btns">
-      <button class="hero-btn-p" onclick="window.location.href='/?sw_go=signin';">Open the dashboard</button>
+      <button class="hero-btn-p" onclick="window.parent.postMessage({cmd:'signin'}, '*');">Open the dashboard</button>
       <button class="hero-btn-s" onclick="document.querySelector('.crisis').scrollIntoView({behavior:'smooth'})">Learn about the crisis &darr;</button>
     </div>
   </div>
 </div>
 
-<!-- STAT BAR -->
-<div class="stat-bar">
-  <div class="si"><div class="sv" style="color:#ef4444;">400K+</div><div class="sl">People displaced annually in the Sudd Basin</div></div>
-  <div class="si"><div class="sv" style="color:#f59e0b;">90%+</div><div class="sl">Cloud cover blinding optical satellites in rainy season</div></div>
-  <div class="si"><div class="sv" style="color:#0ea5e9;">13.1M</div><div class="sl">People covered across Jonglei, Unity &amp; Upper Nile</div></div>
-  <div class="si"><div class="sv" style="color:#22c55e;">&lt;60 min</div><div class="sl">Satellite pass to SMS, fully automated</div></div>
+<!-- STAT BAR + CONTEXT SECTION -->
+<div style="background:__BG__;">
+
+  <!-- ── 6-stat strip — full bleed, equal columns ── -->
+  <div style="display:flex;border-top:1px solid __BO__;border-bottom:1px solid __BO__;">
+    <div style="flex:1;padding:24px 0;text-align:center;border-right:1px solid __BO__;">
+      <div class="sv" style="color:__DA__;">400K+</div>
+      <div class="sl">People displaced annually</div>
+    </div>
+    <div style="flex:1;padding:24px 0;text-align:center;border-right:1px solid __BO__;">
+      <div class="sv" style="color:__WA__;">90%+</div>
+      <div class="sl">Cloud cover in rainy season</div>
+    </div>
+    <div style="flex:1;padding:24px 0;text-align:center;border-right:1px solid __BO__;">
+      <div class="sv" style="color:__AC__;">13.1M</div>
+      <div class="sl">People in monitoring area</div>
+    </div>
+    <div style="flex:1;padding:24px 0;text-align:center;border-right:1px solid __BO__;">
+      <div class="sv" style="color:__SU__;">&lt;60 min</div>
+      <div class="sl">Satellite pass to SMS alert</div>
+    </div>
+    <div style="flex:1;padding:24px 0;text-align:center;border-right:1px solid __BO__;">
+      <div class="sv" style="color:__DA__;">4.7M ha</div>
+      <div class="sl">Peak flood extent 2022</div>
+    </div>
+    <div style="flex:1;padding:24px 0;text-align:center;">
+      <div class="sv" style="color:__AC__;">$0</div>
+      <div class="sl">Cost of Sentinel-1 data</div>
+    </div>
+  </div>
+
+  <!-- ── Image + Video: full bleed, 55/45 ── -->
+  <div style="display:flex;height:520px;border-bottom:1px solid __BO__;">
+
+    <!-- IMPACT map — 55%, image fills full height naturally -->
+    <div style="flex:55;border-right:1px solid __BO__;
+      display:flex;flex-direction:column;overflow:hidden;">
+      <div style="flex:1;overflow:hidden;">
+        <img src="https://www.impact-initiatives.org/wp-content/uploads/2025/12/Untitled-4-1536x888.jpeg"
+          alt="REACH/IMPACT flood mapping Greater Upper Nile 2025"
+          onerror="this.style.display='none'"
+          style="width:100%;height:100%;object-fit:contain;
+            object-position:center;display:block;background:__CA2__;"/>
+      </div>
+      <div style="padding:14px 28px;background:__CA2__;flex-shrink:0;
+        border-top:1px solid __BO__;">
+        <p style="font-size:14px;color:__TM__;margin:0 0 4px;line-height:1.5;">
+          Flood extent mapping across Greater Upper Nile, 2025 rainy season.
+          Blue areas show confirmed inundation detected from Sentinel-1 SAR imagery.</p>
+        <p style="font-family:'DM Mono',monospace;font-size:12px;
+          color:__TX__;margin:0;">
+          Source: REACH / IMPACT Initiatives &middot; December 2025</p>
+      </div>
+    </div>
+
+    <!-- YouTube — 45%, fills full height -->
+    <div style="flex:45;display:flex;flex-direction:column;overflow:hidden;">
+      <div style="flex:1;position:relative;background:#000;">
+        <iframe
+          src="https://www.youtube.com/embed/2dg-0ik1NKM"
+          title="South Sudan floods"
+          style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;"
+          allow="accelerometer;autoplay;clipboard-write;
+            encrypted-media;gyroscope;picture-in-picture"
+          allowfullscreen></iframe>
+      </div>
+      <div style="padding:14px 28px;background:__CA2__;flex-shrink:0;
+        border-top:1px solid __BO__;">
+        <p style="font-size:14px;color:__TM__;margin:0 0 4px;line-height:1.5;">
+          Communities face displacement with no advance warning during the
+          2024 South Sudan flood season.</p>
+        <p style="font-family:'DM Mono',monospace;font-size:12px;
+          color:__TX__;margin:0;">Video &middot; South Sudan floods 2024</p>
+      </div>
+    </div>
+
+  </div>
+
 </div>
 
 <div class="sep"></div>
 
 <!-- THE CRISIS -->
-<div class="crisis section" style="background:#0d1117;">
+<div class="crisis section" style="background:__BG__;">
   <div class="section-inner">
+
     <div class="eyebrow">The Crisis</div>
     <h2>South Sudan faces one of the world&rsquo;s worst flood emergencies.</h2>
-    <p class="section-sub">Greater Upper Nile &mdash; comprising Jonglei, Unity, and Upper Nile states &mdash; sits at the heart of the Sudd, one of Africa&rsquo;s largest wetlands. Every year, rising waters displace communities that have no early warning and no time to prepare.</p>
+    <p class="section-sub" style="max-width:700px;font-size:18px;line-height:1.7;">
+      Greater Upper Nile &mdash; Jonglei, Unity, and Upper Nile states &mdash;
+      sits at the heart of the Sudd, one of Africa&rsquo;s largest wetlands.
+      Record rainfall every year since 2019 has made seasonal flooding a
+      permanent crisis. Hundreds of thousands of people are displaced with
+      little or no warning.
+    </p>
 
-    <!-- Dual image strip -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:40px;">
-      <div class="crisis-img" style="border-radius:12px;overflow:hidden;border:1px solid #21262d;">
-        <img src="https://www.unhcr.org/sites/default/files/styles/landscape_10/public/RF1402702.webp?h=10d202d3&itok=LNJYqZk7&t=1757665833"
-          alt="Displaced communities in South Sudan"
-          onerror="this.parentElement.style.background='#161b22'"
-          style="width:100%;height:280px;object-fit:cover;object-position:center 30%;display:block;filter:brightness(.65);"/>
-        <div class="crisis-cap" style="position:relative;background:#111927;padding:14px 16px;">
-          <p style="font-size:13px;color:#8b949e;">Displaced communities in Jonglei state. The same populations are affected year after year.</p>
-          <p class="source" style="font-size:11px;color:#8b949e;opacity:.6;margin-top:4px;">Photo: UNHCR</p>
-        </div>
+    <!-- ── ROW 1: 4 stats across full width ── -->
+    <div style="display:flex;border:1px solid __BO__;border-radius:12px;
+      overflow:hidden;margin:48px 0 40px;background:__CA__;">
+      <div style="flex:1;padding:28px 24px;border-right:1px solid __BO__;">
+        <div class="cf-v" style="color:__DA__;font-size:clamp(32px,3.5vw,48px);">400,000+</div>
+        <div style="font-size:16px;color:__TX__;line-height:1.65;margin:10px 0 8px;">
+          People displaced every year — one of the highest flood displacement
+          rates in sub-Saharan Africa.</div>
+        <div style="font-family:'DM Mono',monospace;font-size:12px;
+          color:__TX__;">UNHCR · OCHA 2024</div>
       </div>
-      <div class="crisis-img" style="border-radius:12px;overflow:hidden;border:1px solid #21262d;">
-        <img src="https://img.msf.org/AssetLink/pxxx02dwjoy80t55b5ik6764lkl6nt7k.jpg"
-          alt="MSF humanitarian response South Sudan"
-          onerror="this.parentElement.style.background='#161b22'"
-          style="width:100%;height:280px;object-fit:cover;object-position:center 30%;display:block;filter:brightness(.72);"/>
-        <div style="background:#111927;padding:14px 16px;">
-          <p style="font-size:13px;color:#8b949e;">MSF medical teams respond after flooding cuts off road access to health facilities across Greater Upper Nile.</p>
-          <p style="font-size:11px;color:#8b949e;opacity:.6;margin-top:4px;">Photo: MSF</p>
-        </div>
+      <div style="flex:1;padding:28px 24px;border-right:1px solid __BO__;">
+        <div class="cf-v" style="color:__WA__;font-size:clamp(32px,3.5vw,48px);">3–5 days</div>
+        <div style="font-size:16px;color:__TX__;line-height:1.65;margin:10px 0 8px;">
+          Typical delay from flood onset to communities receiving any alert,
+          by which time roads are cut off.</div>
+        <div style="font-family:'DM Mono',monospace;font-size:12px;
+          color:__TX__;">OCHA South Sudan cluster reports</div>
+      </div>
+      <div style="flex:1;padding:28px 24px;border-right:1px solid __BO__;">
+        <div class="cf-v" style="color:__AC__;font-size:clamp(32px,3.5vw,48px);">90%+</div>
+        <div style="font-size:16px;color:__TX__;line-height:1.65;margin:10px 0 8px;">
+          Cloud cover during the May–November rainy season. Optical satellites
+          are blind for months at a time.</div>
+        <div style="font-family:'DM Mono',monospace;font-size:12px;
+          color:__TX__;">ESA Copernicus cloud statistics</div>
+      </div>
+      <div style="flex:1;padding:28px 24px;">
+        <div class="cf-v" style="color:__SU__;font-size:clamp(32px,3.5vw,48px);">382</div>
+        <div style="font-size:16px;color:__TX__;line-height:1.65;margin:10px 0 8px;">
+          Health facilities across the three states — many become inaccessible
+          within hours of a major flood event.</div>
+        <div style="font-family:'DM Mono',monospace;font-size:12px;
+          color:__TX__;">OpenStreetMap · WHO 2024</div>
       </div>
     </div>
 
-    <div class="crisis-grid">
-      <div class="crisis-img">
-        <img src="https://img.msf.org/AssetLink/6ffuum75pgskde5hoidarhl457rqj4rw.jpg"
-          alt="Humanitarian field workers South Sudan"
-          onerror="this.parentElement.style.background='#161b22'"/>
-        <div class="crisis-cap">
-          <p>Field workers assess flooding damage in remote communities. Without early warning, response teams arrive after the critical evacuation window has already closed.</p>
-          <p class="source">Photo: MSF</p>
+    <!-- ── ROW 2: UNHCR photo LEFT / Quote + second photo RIGHT ── -->
+    <div style="display:flex;gap:0;border:1px solid __BO__;
+      border-radius:12px;overflow:hidden;margin-bottom:40px;min-height:420px;">
+
+      <!-- UNHCR photo — 50% -->
+      <div style="flex:1;border-right:1px solid __BO__;
+        display:flex;flex-direction:column;overflow:hidden;">
+        <div style="flex:1;overflow:hidden;">
+          <img src="https://www.unhcr.org/sites/default/files/styles/landscape_10/public/RF1402702.webp?h=10d202d3&itok=LNJYqZk7&t=1757665833"
+            alt="Displaced communities South Sudan"
+            onerror="this.parentElement.style.background='__CA__'"
+            style="width:100%;height:100%;object-fit:cover;
+              object-position:center 30%;display:block;"/>
+        </div>
+        <div style="padding:16px 20px;background:__CA2__;
+          border-top:1px solid __BO__;flex-shrink:0;">
+          <p style="font-size:14px;color:__TM__;margin:0 0 4px;line-height:1.5;">
+            Displaced communities wait for assistance in Jonglei state.
+            The same populations face displacement year after year.</p>
+          <p style="font-family:'DM Mono',monospace;font-size:11px;
+            color:__TM__;margin:0;">Photo: UNHCR</p>
         </div>
       </div>
-      <div class="crisis-facts">
-        <div class="cf"><div class="cf-v" style="color:#ef4444;">400,000+</div><div class="cf-l">People displaced annually across Greater Upper Nile &mdash; one of the highest flood displacement rates in sub-Saharan Africa.</div><div class="cf-s">Source: UNHCR, OCHA 2024</div></div>
-        <div class="cf"><div class="cf-v" style="color:#f59e0b;">3&ndash;5 days</div><div class="cf-l">Typical delay from flood onset to communities receiving any alert &mdash; by which time roads are cut off and supplies cannot reach affected areas.</div><div class="cf-s">Source: OCHA South Sudan cluster reports</div></div>
-        <div class="cf"><div class="cf-v" style="color:#0ea5e9;">382</div><div class="cf-l">Health facilities across the three states &mdash; many of which become inaccessible within hours of a major flooding event.</div><div class="cf-s">Source: OpenStreetMap / WHO 2024</div></div>
-        <div class="cf"><div class="cf-v" style="color:#22c55e;">$0</div><div class="cf-l">Cost of Sentinel-1 satellite data &mdash; ESA provides free, open access to all radar imagery via the Copernicus programme.</div><div class="cf-s">Source: ESA Copernicus Programme</div></div>
+
+      <!-- Right column: pull quote + MSF photo -->
+      <div style="flex:1;display:flex;flex-direction:column;">
+
+        <!-- Pull quote -->
+        <div style="padding:32px 28px;border-bottom:1px solid __BO__;flex:1;
+          display:flex;flex-direction:column;justify-content:center;
+          background:__CA__;">
+          <div style="font-size:13px;font-family:'DM Mono',monospace;
+            color:__AC__;text-transform:uppercase;letter-spacing:.1em;
+            margin-bottom:16px;">Field account</div>
+          <p style="font-size:19px;color:__TX__;line-height:1.75;
+            font-style:italic;margin:0 0 16px;">
+            &ldquo;By the time we know there is a flood, the road is already
+            gone. We cannot bring the trucks. We cannot bring the medicine.
+            The community is cut off.&rdquo;
+          </p>
+          <p style="font-family:'DM Mono',monospace;font-size:12px;
+            color:__TM__;margin:0;">
+            &mdash; WFP logistics coordinator, Greater Upper Nile, 2024</p>
+        </div>
+
+        <!-- MSF field photo -->
+        <div style="flex:1;overflow:hidden;position:relative;min-height:200px;">
+          <img src="https://img.msf.org/AssetLink/6ffuum75pgskde5hoidarhl457rqj4rw.jpg"
+            alt="MSF field workers South Sudan"
+            onerror="this.parentElement.style.background='__CA__'"
+            style="width:100%;height:100%;object-fit:cover;
+              object-position:center;display:block;
+              position:absolute;top:0;left:0;"/>
+          <div style="position:absolute;bottom:0;left:0;right:0;
+            padding:10px 16px;background:linear-gradient(transparent,rgba(0,0,0,.6));
+            font-family:'DM Mono',monospace;font-size:11px;
+            color:rgba(255,255,255,.7);">
+            Field workers assess flood damage &middot; Photo: MSF</div>
+        </div>
+
       </div>
     </div>
 
-    <div class="prob-cards">
-      <div class="pc">
-        <div class="pc-icon"><i class="ti ti-cloud" aria-hidden="true"></i></div>
-        <h4>Cloud cover blinds optical satellites</h4>
-        <p>During the May&ndash;November rainy season, Greater Upper Nile experiences over 90% cloud cover for weeks at a time. Traditional satellite imagery cannot see through clouds. Flooding goes undetected until it is too late.</p>
+    <!-- ── ROW 3: Video LEFT / OCHA quote + second quote RIGHT ── -->
+    <div style="display:flex;gap:0;border:1px solid __BO__;
+      border-radius:12px;overflow:hidden;margin-bottom:48px;min-height:380px;">
+
+      <!-- Video — 55% -->
+      <div style="flex:55;border-right:1px solid __BO__;
+        display:flex;flex-direction:column;">
+        <div style="font-family:'DM Mono',monospace;font-size:10px;
+          color:__TM__;text-transform:uppercase;letter-spacing:.1em;
+          padding:16px 20px 0;flex-shrink:0;">Field Report</div>
+        <div style="flex:1;position:relative;background:#000;min-height:280px;">
+          <iframe
+            src="https://www.youtube.com/embed/5vVMrYdgn8Y"
+            title="South Sudan floods — field report"
+            style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;"
+            allow="accelerometer;autoplay;clipboard-write;
+              encrypted-media;gyroscope;picture-in-picture"
+            allowfullscreen></iframe>
+        </div>
+        <div style="padding:14px 20px;background:__CA2__;
+          border-top:1px solid __BO__;flex-shrink:0;">
+          <p style="font-size:14px;color:__TM__;margin:0;line-height:1.5;">
+            On the ground in Greater Upper Nile — the human cost of flooding
+            with no early warning system.</p>
+        </div>
       </div>
-      <div class="pc">
-        <div class="pc-icon"><i class="ti ti-clock" aria-hidden="true"></i></div>
-        <h4>Manual analysis takes days</h4>
-        <p>Even when imagery is available, traditional workflows require a human analyst to download, process, and distribute data &mdash; a process that typically takes 3&ndash;5 days. SuddWatch compresses this to under 60 minutes through full automation.</p>
-      </div>
-      <div class="pc">
-        <div class="pc-icon"><i class="ti ti-phone-off" aria-hidden="true"></i></div>
-        <h4>Last-mile delivery is broken</h4>
-        <p>Even when flood data exists, it rarely reaches the people who need it most. Village chiefs in remote areas have no way to receive structured alerts. SuddWatch solves this with SMS &mdash; any handset, no internet required.</p>
+
+      <!-- Right: two quotes stacked -->
+      <div style="flex:45;display:flex;flex-direction:column;">
+
+        <div style="flex:1;padding:28px 28px;border-bottom:1px solid __BO__;
+          display:flex;flex-direction:column;justify-content:center;
+          background:__CA__;">
+          <div style="font-size:13px;font-family:'DM Mono',monospace;
+            color:__DA__;text-transform:uppercase;letter-spacing:.1em;
+            margin-bottom:14px;">OCHA 2022</div>
+          <p style="font-size:18px;color:__TX__;line-height:1.75;
+            font-style:italic;margin:0 0 14px;">
+            &ldquo;In 2022, we had four states simultaneously flooded.
+            That has never happened before in recorded history.&rdquo;
+          </p>
+          <p style="font-family:'DM Mono',monospace;font-size:12px;
+            color:__TM__;margin:0;">
+            &mdash; OCHA South Sudan Situation Report, 2022</p>
+        </div>
+
+        <div style="flex:1;padding:28px 28px;
+          display:flex;flex-direction:column;justify-content:center;
+          background:__CA__;">
+          <div style="font-size:13px;font-family:'DM Mono',monospace;
+            color:__AC__;text-transform:uppercase;letter-spacing:.1em;
+            margin-bottom:14px;">The scale</div>
+          <p style="font-size:18px;color:__TX__;line-height:1.75;
+            font-style:italic;margin:0 0 14px;">
+            &ldquo;4.7 million hectares were inundated at peak &mdash; an area
+            larger than Switzerland &mdash; affecting over 900,000 people
+            in a single season.&rdquo;
+          </p>
+          <p style="font-family:'DM Mono',monospace;font-size:12px;
+            color:__TM__;margin:0;">
+            &mdash; UNOSAT Flood Analysis, South Sudan 2022</p>
+        </div>
+
       </div>
     </div>
+
+    <!-- ── ROW 4: 3 problem cards, full width ── -->
+    <div style="font-family:'DM Mono',monospace;font-size:11px;
+      color:__TM__;text-transform:uppercase;letter-spacing:.1em;
+      margin-bottom:20px;">Why the gap exists</div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;">
+      <div style="background:__BG__;border:1px solid __BO__;
+        border-radius:12px;padding:28px;">
+        <div style="margin-bottom:18px;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none"
+  stroke="#0ea5e9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+</svg></div>
+        <h4 style="font-size:20px;font-weight:700;color:#ffffff!important;
+          margin:0 0 14px;line-height:1.2;letter-spacing:-.01em;">
+          Cloud cover blinds optical satellites</h4>
+        <p style="font-size:15px;color:__TM__;line-height:1.75;margin:0;">
+          During the May–November rainy season, Greater Upper Nile sees over 90%
+          cloud cover for weeks at a time. Traditional satellites cannot see
+          through clouds. Flooding goes undetected until it is too late to act.</p>
+      </div>
+      <div style="background:__BG__;border:1px solid __BO__;
+        border-radius:12px;padding:28px;">
+        <div style="margin-bottom:18px;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none"
+  stroke="#f59e0b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="12" cy="12" r="10"/>
+  <polyline points="12 6 12 12 16 14"/>
+</svg></div>
+        <h4 style="font-size:20px;font-weight:700;color:#ffffff!important;
+          margin:0 0 14px;line-height:1.2;letter-spacing:-.01em;">
+          Manual analysis takes days</h4>
+        <p style="font-size:15px;color:__TM__;line-height:1.75;margin:0;">
+          Even when imagery is available, traditional workflows require a human
+          analyst to download, process, and distribute data — typically 3–5 days.
+          SuddWatch compresses this to under 60 minutes through full automation.</p>
+      </div>
+      <div style="background:__BG__;border:1px solid __BO__;
+        border-radius:12px;padding:28px;">
+        <div style="margin-bottom:18px;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none"
+  stroke="#ef4444" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <line x1="1" y1="1" x2="23" y2="23"/>
+  <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/>
+  <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/>
+  <path d="M10.71 5.05A16 16 0 0 1 22.56 9"/>
+  <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/>
+  <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+  <line x1="12" y1="20" x2="12.01" y2="20"/>
+</svg></div>
+        <h4 style="font-size:20px;font-weight:700;color:#ffffff!important;
+          margin:0 0 14px;line-height:1.2;letter-spacing:-.01em;">
+          Last-mile delivery is broken</h4>
+        <p style="font-size:15px;color:__TM__;line-height:1.75;margin:0;">
+          Even when flood data exists, it rarely reaches those who need it most.
+          Village chiefs in remote areas have no way to receive structured alerts.
+          SuddWatch closes this gap with SMS — any handset, no internet needed.</p>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -788,31 +1039,31 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
       <div class="sc-grid">
         <div class="scm">
           <div class="scm-lbl">Time to alert</div>
-          <div class="scm-val" style="color:#22c55e;">45 min</div>
+          <div class="scm-val" style="color:__SU__;">45 min</div>
           <div class="scm-sub">Well within the 60-minute target</div>
-          <div class="scm-track"><div class="scm-fill" style="width:75%;background:#22c55e;"></div></div>
+          <div class="scm-track"><div class="scm-fill" style="width:75%;background:__SU__;"></div></div>
         </div>
         <div class="scm">
           <div class="scm-lbl">Flood extent</div>
-          <div class="scm-val" style="color:#f59e0b;">1,200 ha</div>
+          <div class="scm-val" style="color:__WA__;">1,200 ha</div>
           <div class="scm-sub">Bor South county, Jonglei</div>
-          <div class="scm-track"><div class="scm-fill" style="width:60%;background:#f59e0b;"></div></div>
+          <div class="scm-track"><div class="scm-fill" style="width:60%;background:__WA__;"></div></div>
         </div>
         <div class="scm">
           <div class="scm-lbl">People at risk</div>
-          <div class="scm-val" style="color:#0ea5e9;">6,637</div>
+          <div class="scm-val" style="color:__AC__;">6,637</div>
           <div class="scm-sub">WorldPop 2020 estimate</div>
-          <div class="scm-track"><div class="scm-fill" style="width:50%;background:#0ea5e9;"></div></div>
+          <div class="scm-track"><div class="scm-fill" style="width:50%;background:__AC__;"></div></div>
         </div>
       </div>
       <div class="sc-foot">
-        <span><i class="ti ti-circle-check" style="color:#22c55e;"></i>All alerts delivered</span>
+        <span><i class="ti ti-circle-check" style="color:__SU__;"></i>All alerts delivered</span>
         <span>&middot;</span>
-        <span><i class="ti ti-road-off" style="color:#f59e0b;"></i>3 roads inaccessible</span>
+        <span><i class="ti ti-road-off" style="color:__WA__;"></i>3 roads inaccessible</span>
         <span>&middot;</span>
-        <span><i class="ti ti-building-hospital" style="color:#ef4444;"></i>1 health facility at risk</span>
+        <span><i class="ti ti-building-hospital" style="color:__DA__;"></i>1 health facility at risk</span>
         <span>&middot;</span>
-        <span><i class="ti ti-check" style="color:#22c55e;"></i>All 5 pipeline stages completed</span>
+        <span><i class="ti ti-check" style="color:__SU__;"></i>All 5 pipeline stages completed</span>
       </div>
     </div>
   </div>
@@ -821,7 +1072,7 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
 <div class="sep"></div>
 
 <!-- UNDER THE HOOD -->
-<div class="section" style="background:#161b22;">
+<div class="section" style="background:__CA__;">
   <div class="section-inner">
     <div class="eyebrow">Under the Hood</div>
     <h2>Built on open data.<br>Deployable anywhere.</h2>
@@ -829,7 +1080,7 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
     <div class="tech-grid">
       <div class="tc">
         <div class="tc-head">
-          <div class="tc-icon" style="background:rgba(14,165,233,.1);"><i class="ti ti-satellite" style="color:#0ea5e9;" aria-hidden="true"></i></div>
+          <div class="tc-icon" style="background:rgba(14,165,233,.1);"><i class="ti ti-satellite" style="color:__AC__;" aria-hidden="true"></i></div>
           <h4>ESA Copernicus Sentinel-1</h4>
         </div>
         <p>C-band SAR at 10m resolution, IW GRD mode. Downloaded via the Copernicus Data Space OData API with OAuth2 authentication. Free open access &mdash; no licensing cost whatsoever.</p>
@@ -837,7 +1088,7 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
       </div>
       <div class="tc">
         <div class="tc-head">
-          <div class="tc-icon" style="background:rgba(34,197,94,.1);"><i class="ti ti-users" style="color:#22c55e;" aria-hidden="true"></i></div>
+          <div class="tc-icon" style="background:rgba(34,197,94,.1);"><i class="ti ti-users" style="color:__SU__;" aria-hidden="true"></i></div>
           <h4>WorldPop 2020 Population Grid</h4>
         </div>
         <p>High-resolution population estimates at 100m grid cells covering South Sudan at 13.1M records. Used to estimate affected populations and score village-level flood risk from 0&ndash;100%.</p>
@@ -845,7 +1096,7 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
       </div>
       <div class="tc">
         <div class="tc-head">
-          <div class="tc-icon" style="background:rgba(245,158,11,.1);"><i class="ti ti-map-2" style="color:#f59e0b;" aria-hidden="true"></i></div>
+          <div class="tc-icon" style="background:rgba(245,158,11,.1);"><i class="ti ti-map-2" style="color:__WA__;" aria-hidden="true"></i></div>
           <h4>OpenStreetMap Road Network</h4>
         </div>
         <p>194,291 road features and 382 health facilities from OpenStreetMap. Used to classify road accessibility after flooding and flag at-risk clinics, hospitals, and PHCs in real time.</p>
@@ -866,7 +1117,7 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
 <div class="sep"></div>
 
 <!-- ALERT DELIVERY -->
-<div style="border-bottom:1px solid #21262d;">
+<div style="border-bottom:1px solid __BO__;">
   <div class="alert-hero">
     <img src="https://www.goalglobal.org/wp-content/uploads/2021/03/Chief-Kenyi-Moses-holding-meeting-with-his-community-on-their-contribution-for-setting-up-the-health-and-voluntary-day-every-Monday-held-on-23thApril2020-in-Abaya-village..jpg"
       alt="Community leader with his community in South Sudan" onerror="this.style.opacity='0'"/>
@@ -893,15 +1144,15 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
     <div class="acard">
       <div class="acard-tag"><i class="ti ti-mail-forward" aria-hidden="true"></i>Situation report &middot; UN coordinators</div>
       <div class="kpis">
-        <div class="kpi"><div class="kpi-v" style="color:#0ea5e9;">1,200 ha</div><div class="kpi-l">Flood extent</div></div>
-        <div class="kpi"><div class="kpi-v" style="color:#f59e0b;">6,637</div><div class="kpi-l">Affected people</div></div>
-        <div class="kpi"><div class="kpi-v" style="color:#22c55e;">45 min</div><div class="kpi-l">Time to alert</div></div>
-        <div class="kpi"><div class="kpi-v" style="color:#c9d1d9;">3</div><div class="kpi-l">Roads blocked</div></div>
+        <div class="kpi"><div class="kpi-v" style="color:__AC__;">1,200 ha</div><div class="kpi-l">Flood extent</div></div>
+        <div class="kpi"><div class="kpi-v" style="color:__WA__;">6,637</div><div class="kpi-l">Affected people</div></div>
+        <div class="kpi"><div class="kpi-v" style="color:__SU__;">45 min</div><div class="kpi-l">Time to alert</div></div>
+        <div class="kpi"><div class="kpi-v" style="color:__TX__;">3</div><div class="kpi-l">Roads blocked</div></div>
       </div>
-      <div class="eline"><i class="ti ti-circle" style="color:#ef4444;font-size:10px;" aria-hidden="true"></i>Bor South &middot; 4,200 people &middot; evacuate now</div>
-      <div class="eline"><i class="ti ti-circle" style="color:#f59e0b;font-size:10px;" aria-hidden="true"></i>Akobo East &middot; 1,500 people &middot; alert residents</div>
-      <div class="eline"><i class="ti ti-road-off" style="color:#8b949e;" aria-hidden="true"></i>A1 Highway blocked &middot; alt: air only</div>
-      <div class="eline"><i class="ti ti-building-hospital" style="color:#8b949e;" aria-hidden="true"></i>Bor Civil Hospital &middot; access route flooded</div>
+      <div class="eline"><i class="ti ti-circle" style="color:__DA__;font-size:10px;" aria-hidden="true"></i>Bor South &middot; 4,200 people &middot; evacuate now</div>
+      <div class="eline"><i class="ti ti-circle" style="color:__WA__;font-size:10px;" aria-hidden="true"></i>Akobo East &middot; 1,500 people &middot; alert residents</div>
+      <div class="eline"><i class="ti ti-road-off" style="color:__TM__;" aria-hidden="true"></i>A1 Highway blocked &middot; alt: air only</div>
+      <div class="eline"><i class="ti ti-building-hospital" style="color:__TM__;" aria-hidden="true"></i>Bor Civil Hospital &middot; access route flooded</div>
     </div>
     <div class="acard">
       <div class="acard-tag"><i class="ti ti-layout-dashboard" aria-hidden="true"></i>Live dashboard &middot; All roles</div>
@@ -916,27 +1167,27 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
         </div>
         <div class="dash-body">
           <div class="dkpis">
-            <div class="dkpi"><div class="dkpi-v" style="color:#0ea5e9;">1,200 ha</div><div class="dkpi-l">Flood extent</div></div>
-            <div class="dkpi"><div class="dkpi-v" style="color:#f59e0b;">6,637</div><div class="dkpi-l">At risk</div></div>
-            <div class="dkpi"><div class="dkpi-v" style="color:#22c55e;">45 min</div><div class="dkpi-l">Latency</div></div>
-            <div class="dkpi"><div class="dkpi-v" style="color:#c9d1d9;">0.71</div><div class="dkpi-l">Accuracy</div></div>
+            <div class="dkpi"><div class="dkpi-v" style="color:__AC__;">1,200 ha</div><div class="dkpi-l">Flood extent</div></div>
+            <div class="dkpi"><div class="dkpi-v" style="color:__WA__;">6,637</div><div class="dkpi-l">At risk</div></div>
+            <div class="dkpi"><div class="dkpi-v" style="color:__SU__;">45 min</div><div class="dkpi-l">Latency</div></div>
+            <div class="dkpi"><div class="dkpi-v" style="color:__TX__;">0.71</div><div class="dkpi-l">Accuracy</div></div>
           </div>
           <div class="dash-map">
             <svg viewBox="0 0 220 86" width="100%" xmlns="http://www.w3.org/2000/svg">
-              <ellipse cx="88" cy="46" rx="34" ry="20" fill="#0ea5e9" opacity=".12" stroke="#0ea5e9" stroke-width="1" stroke-dasharray="3,2"/>
-              <ellipse cx="55" cy="54" rx="22" ry="13" fill="#0ea5e9" opacity=".1" stroke="#0ea5e9" stroke-width="1" stroke-dasharray="3,2"/>
-              <path d="M110 6 C114 30 108 55 110 80" fill="none" stroke="#0ea5e9" stroke-width="2.5" opacity=".5" stroke-linecap="round"/>
-              <circle cx="88" cy="46" r="5.5" fill="#ef4444" stroke="#111927" stroke-width="1.5"/>
-              <circle cx="132" cy="38" r="5" fill="#f59e0b" stroke="#111927" stroke-width="1.5"/>
-              <circle cx="160" cy="60" r="4" fill="#22c55e" stroke="#111927" stroke-width="1.5"/>
-              <rect x="4" y="4" width="60" height="14" rx="4" fill="rgba(14,165,233,.1)" stroke="#0ea5e9" stroke-width=".5"/>
-              <text x="21" y="14" font-family="monospace" font-size="7" fill="#0ea5e9">SAR LIVE</text>
+              <ellipse cx="88" cy="46" rx="34" ry="20" fill="__AC__" opacity=".12" stroke="__AC__" stroke-width="1" stroke-dasharray="3,2"/>
+              <ellipse cx="55" cy="54" rx="22" ry="13" fill="__AC__" opacity=".1" stroke="__AC__" stroke-width="1" stroke-dasharray="3,2"/>
+              <path d="M110 6 C114 30 108 55 110 80" fill="none" stroke="__AC__" stroke-width="2.5" opacity=".5" stroke-linecap="round"/>
+              <circle cx="88" cy="46" r="5.5" fill="__DA__" stroke="__CA2__" stroke-width="1.5"/>
+              <circle cx="132" cy="38" r="5" fill="__WA__" stroke="__CA2__" stroke-width="1.5"/>
+              <circle cx="160" cy="60" r="4" fill="__SU__" stroke="__CA2__" stroke-width="1.5"/>
+              <rect x="4" y="4" width="60" height="14" rx="4" fill="rgba(14,165,233,.1)" stroke="__AC__" stroke-width=".5"/>
+              <text x="21" y="14" font-family="monospace" font-size="7" fill="__AC__">SAR LIVE</text>
             </svg>
           </div>
           <div class="dash-rows">
-            <div class="dash-row"><div class="dash-dot" style="background:#ef4444;"></div><div class="dash-line"></div><span class="dash-val">Bor South &middot; HIGH</span></div>
-            <div class="dash-row"><div class="dash-dot" style="background:#f59e0b;"></div><div class="dash-line"></div><span class="dash-val">Akobo &middot; MED</span></div>
-            <div class="dash-row"><div class="dash-dot" style="background:#22c55e;"></div><div class="dash-line"></div><span class="dash-val">Malakal &middot; LOW</span></div>
+            <div class="dash-row"><div class="dash-dot" style="background:__DA__;"></div><div class="dash-line"></div><span class="dash-val">Bor South &middot; HIGH</span></div>
+            <div class="dash-row"><div class="dash-dot" style="background:__WA__;"></div><div class="dash-line"></div><span class="dash-val">Akobo &middot; MED</span></div>
+            <div class="dash-row"><div class="dash-dot" style="background:__SU__;"></div><div class="dash-line"></div><span class="dash-val">Malakal &middot; LOW</span></div>
           </div>
         </div>
       </div>
@@ -951,7 +1202,7 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
 </div>
 
 <!-- ON THE GROUND -->
-<div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid #21262d;border-bottom:1px solid #21262d;">
+<div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid __BO__;border-bottom:1px solid __BO__;">
   <div style="position:relative;overflow:hidden;">
     <img src="https://img.msf.org/Doc_Prod/TR1/f/8/0/6/MSB139578.jpg?d0"
       alt="MSF field medical response"
@@ -978,7 +1229,7 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
     <div style="display:flex;flex-direction:column;gap:0;">
       <div class="ground-item">
         <div class="ground-icon" style="background:rgba(34,197,94,.1);">
-          <i class="ti ti-home" style="font-size:19px;color:#22c55e;"></i>
+          <i class="ti ti-home" style="font-size:19px;color:__SU__;"></i>
         </div>
         <div>
           <div class="step-title">Families evacuate safely</div>
@@ -987,7 +1238,7 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
       </div>
       <div class="ground-item">
         <div class="ground-icon" style="background:rgba(14,165,233,.1);">
-          <i class="ti ti-truck-delivery" style="font-size:19px;color:#0ea5e9;"></i>
+          <i class="ti ti-truck-delivery" style="font-size:19px;color:__AC__;"></i>
         </div>
         <div>
           <div class="step-title">Aid reaches communities in time</div>
@@ -996,7 +1247,7 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
       </div>
       <div class="ground-item">
         <div class="ground-icon" style="background:rgba(239,68,68,.1);">
-          <i class="ti ti-building-hospital" style="font-size:19px;color:#ef4444;"></i>
+          <i class="ti ti-building-hospital" style="font-size:19px;color:__DA__;"></i>
         </div>
         <div>
           <div class="step-title">Health facilities stay accessible</div>
@@ -1005,7 +1256,7 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
       </div>
       <div class="ground-item" style="border-bottom:none;padding-bottom:0;">
         <div class="ground-icon" style="background:rgba(245,158,11,.1);">
-          <i class="ti ti-chart-line" style="font-size:19px;color:#f59e0b;"></i>
+          <i class="ti ti-chart-line" style="font-size:19px;color:__WA__;"></i>
         </div>
         <div>
           <div class="step-title">Response costs drop significantly</div>
@@ -1017,7 +1268,7 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
 </div>
 
 <!-- FEATURES -->
-<div class="feats section" style="background:#0d1117;">
+<div class="feats section" style="background:__BG__;">
   <div class="section-inner">
     <div class="eyebrow">The Dashboard</div>
     <h2>A full operational picture<br>in one place.</h2>
@@ -1036,15 +1287,15 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
 <div class="sep"></div>
 
 <!-- WHO USES -->
-<div class="section" style="background:#161b22;">
+<div class="section" style="background:__CA__;">
   <div class="section-inner">
     <div class="eyebrow">Who Uses SuddWatch</div>
     <h2>Built for every level<br>of the response chain.</h2>
     <p class="section-sub">From village chiefs receiving a 160-character SMS to GIS analysts downloading GeoTIFF exports &mdash; SuddWatch serves every role in the humanitarian response.</p>
     <div class="who-grid">
-      <div class="wc"><div class="ws" style="background:#ef4444;"></div><div class="wo">Field Level</div><div class="wt">Village chiefs &amp; community leaders</div><div class="wd">Receive a plain-language SMS the moment flooding is detected near their community. No smartphone, no internet, no app &mdash; works on any basic handset in the most remote locations.</div></div>
-      <div class="wc"><div class="ws" style="background:#f59e0b;"></div><div class="wo">Coordination Level</div><div class="wt">UN OCHA &amp; IFRC coordinators</div><div class="wd">Receive a structured HTML situation report with flood extent, affected population, inaccessible roads, and at-risk health facilities &mdash; formatted for immediate distribution to response teams.</div></div>
-      <div class="wc"><div class="ws" style="background:#0ea5e9;"></div><div class="wo">Technical Level</div><div class="wt">REACH &amp; UNOSAT GIS analysts</div><div class="wd">Download GeoJSON, Shapefile, or GeoTIFF exports from the dashboard for use in QGIS and ArcGIS. Full raster flood mask for integration into broader mapping workflows.</div></div>
+      <div class="wc"><div class="ws" style="background:__DA__;"></div><div class="wo">Field Level</div><div class="wt">Village chiefs &amp; community leaders</div><div class="wd">Receive a plain-language SMS the moment flooding is detected near their community. No smartphone, no internet, no app &mdash; works on any basic handset in the most remote locations.</div></div>
+      <div class="wc"><div class="ws" style="background:__WA__;"></div><div class="wo">Coordination Level</div><div class="wt">UN OCHA &amp; IFRC coordinators</div><div class="wd">Receive a structured HTML situation report with flood extent, affected population, inaccessible roads, and at-risk health facilities &mdash; formatted for immediate distribution to response teams.</div></div>
+      <div class="wc"><div class="ws" style="background:__AC__;"></div><div class="wo">Technical Level</div><div class="wt">REACH &amp; UNOSAT GIS analysts</div><div class="wd">Download GeoJSON, Shapefile, or GeoTIFF exports from the dashboard for use in QGIS and ArcGIS. Full raster flood mask for integration into broader mapping workflows.</div></div>
     </div>
   </div>
 </div>
@@ -1052,18 +1303,18 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
 <div class="sep"></div>
 
 <!-- NEWS & INTELLIGENCE -->
-<div class="news-bg" style="border-top:1px solid #21262d;border-bottom:1px solid #21262d;">
+<div class="news-bg" style="border-top:1px solid __BO__;border-bottom:1px solid __BO__;">
   <div style="padding:72px 48px 0;max-width:940px;margin:0 auto;">
     <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:36px;flex-wrap:wrap;gap:12px;">
       <div>
         <div class="eyebrow">Humanitarian Intelligence</div>
         <h2 style="font-family:'Barlow Condensed',sans-serif;font-size:clamp(28px,4.5vw,46px);
-          font-weight:700;color:#f0f6fc;letter-spacing:.02em;line-height:1.08;margin-bottom:0;">
+          font-weight:700;color:__TH__;letter-spacing:.02em;line-height:1.08;margin-bottom:0;">
           Latest situation reports<br>from the field.
         </h2>
       </div>
       <a href="https://reliefweb.int/disasters?search=south+sudan+flood" target="_blank"
-        style="font-family:'DM Mono',monospace;font-size:13px;color:#0ea5e9;text-decoration:none;
+        style="font-family:'DM Mono',monospace;font-size:13px;color:__AC__;text-decoration:none;
         display:inline-flex;align-items:center;gap:6px;white-space:nowrap;padding:10px 18px;
         border:1px solid rgba(14,165,233,.25);border-radius:8px;transition:.15s;"
         onmouseover="this.style.background='rgba(14,165,233,.07)'"
@@ -1074,16 +1325,16 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
   </div>
 
   <!-- Horizontally scrollable cards -->
-  <div style="overflow-x:auto;padding:0 48px 48px;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:#21262d transparent;">
+  <div style="overflow-x:auto;padding:0 48px 48px;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:__BO__ transparent;">
     <div style="display:flex;gap:16px;width:max-content;padding-bottom:8px;">
 
       <div class="nc">
         <div class="nc-banner" style="background:linear-gradient(135deg,rgba(14,165,233,.18),rgba(14,165,233,.05));">
-          <i class="ti ti-droplet" style="font-size:52px;color:#0ea5e9;opacity:.45;"></i>
+          <i class="ti ti-droplet" style="font-size:52px;color:__AC__;opacity:.45;"></i>
         </div>
         <div class="nc-body">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-            <span class="nc-badge" style="color:#0ea5e9;background:rgba(14,165,233,.12);">OCHA</span>
+            <span class="nc-badge" style="color:__AC__;background:rgba(14,165,233,.12);">OCHA</span>
             <span class="nc-date">Oct 2025</span>
           </div>
           <div class="nc-title">South Sudan: Flood Situation Report &mdash; Greater Upper Nile, October 2025</div>
@@ -1094,11 +1345,11 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
 
       <div class="nc">
         <div class="nc-banner" style="background:linear-gradient(135deg,rgba(239,68,68,.15),rgba(239,68,68,.04));">
-          <i class="ti ti-building-hospital" style="font-size:52px;color:#ef4444;opacity:.45;"></i>
+          <i class="ti ti-building-hospital" style="font-size:52px;color:__DA__;opacity:.45;"></i>
         </div>
         <div class="nc-body">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-            <span class="nc-badge" style="color:#ef4444;background:rgba(239,68,68,.1);">MSF</span>
+            <span class="nc-badge" style="color:__DA__;background:rgba(239,68,68,.1);">MSF</span>
             <span class="nc-date">Sep 2025</span>
           </div>
           <div class="nc-title">Emergency medical teams deployed as floods cut hospital access in Leer and Bentiu</div>
@@ -1109,11 +1360,11 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
 
       <div class="nc">
         <div class="nc-banner" style="background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(245,158,11,.04));">
-          <i class="ti ti-users" style="font-size:52px;color:#f59e0b;opacity:.45;"></i>
+          <i class="ti ti-users" style="font-size:52px;color:__WA__;opacity:.45;"></i>
         </div>
         <div class="nc-body">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-            <span class="nc-badge" style="color:#f59e0b;background:rgba(245,158,11,.1);">UNHCR</span>
+            <span class="nc-badge" style="color:__WA__;background:rgba(245,158,11,.1);">UNHCR</span>
             <span class="nc-date">Sep 2025</span>
           </div>
           <div class="nc-title">Displacement rises sharply in Jonglei as communities move to higher ground for third consecutive year</div>
@@ -1124,11 +1375,11 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
 
       <div class="nc">
         <div class="nc-banner" style="background:linear-gradient(135deg,rgba(34,197,94,.15),rgba(34,197,94,.04));">
-          <i class="ti ti-wheat" style="font-size:52px;color:#22c55e;opacity:.45;"></i>
+          <i class="ti ti-wheat" style="font-size:52px;color:__SU__;opacity:.45;"></i>
         </div>
         <div class="nc-body">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-            <span class="nc-badge" style="color:#22c55e;background:rgba(34,197,94,.1);">WFP</span>
+            <span class="nc-badge" style="color:__SU__;background:rgba(34,197,94,.1);">WFP</span>
             <span class="nc-date">Aug 2025</span>
           </div>
           <div class="nc-title">Food security crisis deepens as flooding destroys crops and disrupts supply chains across Upper Nile</div>
@@ -1154,11 +1405,11 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
 
       <div class="nc">
         <div class="nc-banner" style="background:linear-gradient(135deg,rgba(239,68,68,.12),rgba(245,158,11,.06));">
-          <i class="ti ti-first-aid-kit" style="font-size:52px;color:#ef4444;opacity:.45;"></i>
+          <i class="ti ti-first-aid-kit" style="font-size:52px;color:__DA__;opacity:.45;"></i>
         </div>
         <div class="nc-body">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-            <span class="nc-badge" style="color:#ef4444;background:rgba(239,68,68,.1);">IFRC</span>
+            <span class="nc-badge" style="color:__DA__;background:rgba(239,68,68,.1);">IFRC</span>
             <span class="nc-date">Jul 2025</span>
           </div>
           <div class="nc-title">Red Cross emergency appeal activated for South Sudan flood response &mdash; $4.2M requested</div>
@@ -1173,12 +1424,12 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
   <div style="padding:0 48px 48px;max-width:940px;margin:0 auto;">
     <div style="padding:14px 18px;background:rgba(14,165,233,.06);
       border:1px solid rgba(14,165,233,.15);border-radius:8px;
-      font-size:14px;color:#8b949e;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-      <i class="ti ti-info-circle" style="font-size:18px;color:#0ea5e9;flex-shrink:0;"></i>
+      font-size:14px;color:__TM__;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <i class="ti ti-info-circle" style="font-size:18px;color:__AC__;flex-shrink:0;"></i>
       Live situation reports are pulled automatically via the ReliefWeb API in the operational dashboard.
       The cards above show representative examples.
       <a href="#" onclick="window.__suddSignin();"
-        style="color:#0ea5e9;text-decoration:none;white-space:nowrap;margin-left:auto;">
+        style="color:__AC__;text-decoration:none;white-space:nowrap;margin-left:auto;">
         Sign in to see live data &rarr;
       </a>
     </div>
@@ -1186,42 +1437,42 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
 </div>
 
 <!-- FLOOD SEASON STRIP -->
-<div style="background:#111927;border-top:1px solid #21262d;border-bottom:1px solid #21262d;padding:48px;">
+<div style="background:__CA2__;border-top:1px solid __BO__;border-bottom:1px solid __BO__;padding:48px;">
   <div style="max-width:940px;margin:0 auto;">
-    <div style="font-family:'DM Mono',monospace;font-size:11px;color:#0ea5e9;letter-spacing:.14em;text-transform:uppercase;margin-bottom:20px;">Flood Season Calendar</div>
+    <div style="font-family:'DM Mono',monospace;font-size:11px;color:__AC__;letter-spacing:.14em;text-transform:uppercase;margin-bottom:20px;">Flood Season Calendar</div>
     <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px;margin-bottom:14px;">
-      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:#8b949e;">Jan</div>
-      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:#8b949e;">Feb</div>
-      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:#8b949e;">Mar</div>
-      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:#8b949e;">Apr</div>
-      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:#f59e0b;">May</div>
-      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:#f59e0b;">Jun</div>
-      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:#ef4444;">Jul</div>
-      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:#ef4444;">Aug</div>
-      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:#ef4444;">Sep</div>
-      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:#f59e0b;">Oct</div>
-      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:#8b949e;">Nov</div>
-      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:#8b949e;">Dec</div>
+      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:__TM__;">Jan</div>
+      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:__TM__;">Feb</div>
+      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:__TM__;">Mar</div>
+      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:__TM__;">Apr</div>
+      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:__WA__;">May</div>
+      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:__WA__;">Jun</div>
+      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:__DA__;">Jul</div>
+      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:__DA__;">Aug</div>
+      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:__DA__;">Sep</div>
+      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:__WA__;">Oct</div>
+      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:__TM__;">Nov</div>
+      <div style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:__TM__;">Dec</div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px;margin-bottom:20px;">
-      <div style="height:20px;border-radius:4px;background:#21262d;"></div>
-      <div style="height:20px;border-radius:4px;background:#21262d;"></div>
-      <div style="height:20px;border-radius:4px;background:#21262d;"></div>
-      <div style="height:20px;border-radius:4px;background:#21262d;"></div>
+      <div style="height:20px;border-radius:4px;background:__BO__;"></div>
+      <div style="height:20px;border-radius:4px;background:__BO__;"></div>
+      <div style="height:20px;border-radius:4px;background:__BO__;"></div>
+      <div style="height:20px;border-radius:4px;background:__BO__;"></div>
       <div style="height:20px;border-radius:4px;background:rgba(245,158,11,.35);"></div>
       <div style="height:20px;border-radius:4px;background:rgba(245,158,11,.55);"></div>
       <div style="height:20px;border-radius:4px;background:rgba(239,68,68,.7);"></div>
       <div style="height:20px;border-radius:4px;background:rgba(239,68,68,.9);"></div>
       <div style="height:20px;border-radius:4px;background:rgba(239,68,68,.75);"></div>
       <div style="height:20px;border-radius:4px;background:rgba(245,158,11,.45);"></div>
-      <div style="height:20px;border-radius:4px;background:#21262d;"></div>
-      <div style="height:20px;border-radius:4px;background:#21262d;"></div>
+      <div style="height:20px;border-radius:4px;background:__BO__;"></div>
+      <div style="height:20px;border-radius:4px;background:__BO__;"></div>
     </div>
-    <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:13px;color:#8b949e;">
+    <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:13px;color:__TM__;">
       <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:rgba(239,68,68,.8);margin-right:6px;vertical-align:middle;"></span>Peak flood season (Jul–Sep)</span>
       <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:rgba(245,158,11,.5);margin-right:6px;vertical-align:middle;"></span>Rising / receding waters (May–Jun, Oct)</span>
-      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#21262d;margin-right:6px;vertical-align:middle;"></span>Dry season</span>
-      <span style="margin-left:auto;font-family:'DM Mono',monospace;font-size:11px;color:#0ea5e9;">SuddWatch monitors year-round</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:__BO__;margin-right:6px;vertical-align:middle;"></span>Dry season</span>
+      <span style="margin-left:auto;font-family:'DM Mono',monospace;font-size:11px;color:__AC__;">SuddWatch monitors year-round</span>
     </div>
   </div>
 </div>
@@ -1232,8 +1483,8 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
   <h2>Ready to put satellite intelligence<br>in the hands of responders?</h2>
   <p>Sign in to monitor live flood events, track alerts, and export data for field teams. Or request access for your organisation.</p>
   <div class="cta-btns">
-    <button class="cta-p" onclick="window.location.href='/?sw_go=signin';">Sign in to dashboard</button>
-    <button class="cta-s" onclick="window.location.href='/?sw_go=signin';">Request access</button>
+    <button class="cta-p" onclick="window.parent.postMessage({cmd:'signin'}, '*');">Sign in to dashboard</button>
+    <button class="cta-s" onclick="window.parent.postMessage({cmd:'signin'}, '*');">Request access</button>
   </div>
   <div class="cta-note">
     Open source &middot;
@@ -1248,10 +1499,10 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
     <div class="fb">
       <div style="display:flex;align-items:center;gap:9px;margin-bottom:4px;">
         <svg width="22" height="22" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-          <path d="M14 4C14 4 8 11 8 16C8 19.3 10.7 22 14 22C17.3 22 20 19.3 20 16C20 11 14 4 14 4Z" fill="#0ea5e9" opacity=".9"/>
-          <path d="M3 23Q7 19.5 11 23Q15 26.5 19 23Q23 19.5 27 23" fill="none" stroke="#0ea5e9" stroke-width="1.6" stroke-linecap="round" opacity=".6"/>
+          <path d="M14 4C14 4 8 11 8 16C8 19.3 10.7 22 14 22C17.3 22 20 19.3 20 16C20 11 14 4 14 4Z" fill="__AC__" opacity=".9"/>
+          <path d="M3 23Q7 19.5 11 23Q15 26.5 19 23Q23 19.5 27 23" fill="none" stroke="__AC__" stroke-width="1.6" stroke-linecap="round" opacity=".6"/>
         </svg>
-        <span style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;color:#f0f6fc;letter-spacing:.06em;">SUDDWATCH</span>
+        <span style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;color:__TH__;letter-spacing:.06em;">SUDDWATCH</span>
       </div>
       <p>Operational flood detection and humanitarian alert system for Greater Upper Nile, South Sudan. Built on open satellite data, open-source tools, and zero infrastructure cost.</p>
       <div class="partner-logos">
@@ -1267,11 +1518,11 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
     </div>
     <div class="fc">
       <h5>Dashboard</h5>
-      <a href="#" onclick="window.location.href='/?sw_go=signin';">Home &mdash; live events</a>
-      <a href="#" onclick="window.location.href='/?sw_go=signin';">Event history</a>
-      <a href="#" onclick="window.location.href='/?sw_go=signin';">Performance</a>
-      <a href="#" onclick="window.location.href='/?sw_go=signin';">Export data</a>
-      <a href="#" onclick="window.location.href='/?sw_go=signin';">Admin panel</a>
+      <a href="#" onclick="window.parent.postMessage({cmd:'signin'}, '*');">Home &mdash; live events</a>
+      <a href="#" onclick="window.parent.postMessage({cmd:'signin'}, '*');">Event history</a>
+      <a href="#" onclick="window.parent.postMessage({cmd:'signin'}, '*');">Performance</a>
+      <a href="#" onclick="window.parent.postMessage({cmd:'signin'}, '*');">Export data</a>
+      <a href="#" onclick="window.parent.postMessage({cmd:'signin'}, '*');">Admin panel</a>
     </div>
     <div class="fc">
       <h5>Data Sources</h5>
@@ -1284,8 +1535,8 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:60px 48px 28px;}
     <div class="fc">
       <h5>Project</h5>
       <a href="https://github.com/Billawan12/suddwatch" target="_blank">GitHub repository</a>
-      <a href="#" onclick="window.location.href='/?sw_go=signin';">Sign in</a>
-      <a href="#" onclick="window.location.href='/?sw_go=signin';">Request access</a>
+      <a href="#" onclick="window.parent.postMessage({cmd:'signin'}, '*');">Sign in</a>
+      <a href="#" onclick="window.parent.postMessage({cmd:'signin'}, '*');">Request access</a>
       <a href="https://www.usiu.ac.ke" target="_blank">USIU-Africa</a>
     </div>
   </div>
