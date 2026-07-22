@@ -7,10 +7,19 @@ from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
+
+# Must be first Streamlit command — before ANY st.cache_data or other st.* calls
+st.set_page_config(
+    page_title="SuddWatch — Flood Intelligence",
+    layout="wide",
+    initial_sidebar_state="expanded",
+    page_icon="🌊",
+)
+
 import plotly.graph_objects as go
 
-sys.path.insert(0, str(Path(__file__).parent))
 try:
+    sys.path.insert(0, str(Path(__file__).parent))
     import db
 except Exception as _db_err:
     import types as _types
@@ -64,16 +73,7 @@ except ImportError:
     pass  # optional dependency
 
 # ── Session state ─────────────────────────────────────────────
-_defaults = {
-    "page": "Home", "hist_state": "All",
-    "hist_min_iou": 0.65, "hist_min_pop": 0,
-    "export_scope": "Single Event", "export_fmt": "GeoJSON",
-    "export_layers": {"Flood Extent Polygon","Affected Villages","Health Facilities at Risk"},
-    "export_events": {"EVT-2025-047"}, "export_done": False,
-}
-for k, v in _defaults.items():
-    if k not in st.session_state:
-        st.session_state[k] = v
+# session defaults set in MAIN after set_page_config
 
 
 # ════════════════════════════════════════════════════════════
@@ -3413,6 +3413,18 @@ def render_intelligence_feed():
 # ════════════════════════════════════════════════════════════
 # MAIN
 # ════════════════════════════════════════════════════════════
+
+# Session state defaults
+for _k, _v in {
+    "page": "Home", "hist_state": "All",
+    "hist_min_iou": 0.65, "hist_min_pop": 0,
+    "export_scope": "Single Event", "export_fmt": "GeoJSON",
+    "export_layers": {"Flood Extent Polygon","Affected Villages","Health Facilities at Risk"},
+    "export_events": {"EVT-2025-047"}, "export_done": False,
+    "show_glossary": False, "theme_choice": "dark",
+}.items():
+    if _k not in st.session_state:
+        st.session_state[_k] = _v
 
 # Global readability + anti-flash CSS — runs on every rerun
 st.markdown("""<style>
