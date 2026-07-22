@@ -10,7 +10,19 @@ import streamlit as st
 import plotly.graph_objects as go
 
 sys.path.insert(0, str(Path(__file__).parent))
-import db
+try:
+    import db
+except Exception as _db_err:
+    import types as _types
+    db = _types.ModuleType("db")
+    # Provide stub functions so dashboard loads even if db fails
+    for _fn in ["get_active_event","get_villages","get_roads",
+                "get_health_facilities","get_alerts","get_data_sources",
+                "get_state_breakdown","get_all_events","get_season_monthly",
+                "get_performance_rows","get_download_history"]:
+        setattr(db, _fn, lambda *a, **k: [] if "event" not in _fn else {})
+    import streamlit as st
+    st.error(f"Database module failed to load: {_db_err}")
 import styles as s
 
 # ── Dynamic theme patcher ─────────────────────────────────────────────────
@@ -23,17 +35,17 @@ import styles as s
 def _cached_active_event():       return db.get_active_event() or {}
 @st.cache_data(ttl=60, show_spinner=False)
 def _cached_villages(evt_id):     return db.get_villages(evt_id)
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=600, show_spinner=False)
 def _cached_roads():              return db.get_roads()
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=600, show_spinner=False)
 def _cached_health_facilities():  return db.get_health_facilities()
 @st.cache_data(ttl=60, show_spinner=False)
 def _cached_alerts():             return db.get_alerts()
 @st.cache_data(ttl=60, show_spinner=False)
 def _cached_data_sources():       return db.get_data_sources()
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def _cached_state_breakdown():    return db.get_state_breakdown()
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def _cached_all_events():         return db.get_all_events()
 @st.cache_data(ttl=60, show_spinner=False)
 def _cached_season_monthly():     return db.get_season_monthly()
@@ -693,7 +705,7 @@ iframe{display:block!important;margin:0!important;padding:0!important;
         st.error("landing.html not found.")
         return
 
-    @st.cache_data(show_spinner=False)
+    @st.cache_data(ttl=3600, show_spinner=False)
     def _load_landing_html(path_str, theme):
         html = open(path_str).read()
         return html
@@ -3442,7 +3454,6 @@ html,body,[data-testid="stApp"],[data-testid="stAppViewContainer"]{{
     background:{s.BG}!important;}}
 [data-testid="stVerticalBlock"]{{background:{s.BG}!important;}}
 iframe{{display:none!important;}}
-*{{transition:none!important;}}
 </style>""", unsafe_allow_html=True)
 
         # Full-screen centered container — no columns so no shrink on rerun
