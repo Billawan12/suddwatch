@@ -1,0 +1,14 @@
+# Dashboard dependencies only — for Streamlit Cloud deployment
+# Pipeline dependencies (rasterio, geopandas, fiona etc) require
+# system-level GDAL and are installed separately for local pipeline use.
+
+streamlit>=1.58.0
+plotly>=5.18.0
+folium>=0.15.0
+streamlit-folium>=0.22.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+python-json-logger>=2.0.0
+pandas>=2.0.0
+numpy>=1.24.0
+streamlit-autorefresh>=1.0.0
