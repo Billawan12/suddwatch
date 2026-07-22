@@ -7,31 +7,10 @@ from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
-
-# Must be first Streamlit command — before ANY st.cache_data or other st.* calls
-st.set_page_config(
-    page_title="SuddWatch — Flood Intelligence",
-    layout="wide",
-    initial_sidebar_state="expanded",
-    page_icon="🌊",
-)
-
 import plotly.graph_objects as go
 
-try:
-    sys.path.insert(0, str(Path(__file__).parent))
-    import db
-except Exception as _db_err:
-    import types as _types
-    db = _types.ModuleType("db")
-    # Provide stub functions so dashboard loads even if db fails
-    for _fn in ["get_active_event","get_villages","get_roads",
-                "get_health_facilities","get_alerts","get_data_sources",
-                "get_state_breakdown","get_all_events","get_season_monthly",
-                "get_performance_rows","get_download_history"]:
-        setattr(db, _fn, lambda *a, **k: [] if "event" not in _fn else {})
-    import streamlit as st
-    st.error(f"Database module failed to load: {_db_err}")
+sys.path.insert(0, str(Path(__file__).parent))
+import db
 import styles as s
 
 # ── Dynamic theme patcher ─────────────────────────────────────────────────
@@ -44,17 +23,17 @@ import styles as s
 def _cached_active_event():       return db.get_active_event() or {}
 @st.cache_data(ttl=60, show_spinner=False)
 def _cached_villages(evt_id):     return db.get_villages(evt_id)
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
 def _cached_roads():              return db.get_roads()
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
 def _cached_health_facilities():  return db.get_health_facilities()
 @st.cache_data(ttl=60, show_spinner=False)
 def _cached_alerts():             return db.get_alerts()
 @st.cache_data(ttl=60, show_spinner=False)
 def _cached_data_sources():       return db.get_data_sources()
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
 def _cached_state_breakdown():    return db.get_state_breakdown()
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
 def _cached_all_events():         return db.get_all_events()
 @st.cache_data(ttl=60, show_spinner=False)
 def _cached_season_monthly():     return db.get_season_monthly()
@@ -73,7 +52,16 @@ except ImportError:
     pass  # optional dependency
 
 # ── Session state ─────────────────────────────────────────────
-# session defaults set in MAIN after set_page_config
+_defaults = {
+    "page": "Home", "hist_state": "All",
+    "hist_min_iou": 0.65, "hist_min_pop": 0,
+    "export_scope": "Single Event", "export_fmt": "GeoJSON",
+    "export_layers": {"Flood Extent Polygon","Affected Villages","Health Facilities at Risk"},
+    "export_events": {"EVT-2025-047"}, "export_done": False,
+}
+for k, v in _defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
 
 # ════════════════════════════════════════════════════════════
@@ -652,7 +640,7 @@ def render_map(t, event=None, villages=None, roads=None, hf=None, alerts=None):
     </div>"""
     m.get_root().html.add_child(folium.Element(credit))
 
-    st_folium(m, height=720, use_container_width=True, returned_objects=[])
+    st_folium(m, height=720, width="stretch", returned_objects=[])
 
 
 # ════════════════════════════════════════════════════════════
@@ -705,7 +693,7 @@ iframe{display:block!important;margin:0!important;padding:0!important;
         st.error("landing.html not found.")
         return
 
-    @st.cache_data(ttl=3600, show_spinner=False)
+    @st.cache_data(show_spinner=False)
     def _load_landing_html(path_str, theme):
         html = open(path_str).read()
         return html
@@ -976,7 +964,7 @@ def render_sidebar():
                     f"<span style='color:{s.ACCENT};'>{icon}</span>{pg}</div>",
                     unsafe_allow_html=True)
             else:
-                if st.button(pg, key=f"nav_{pg}", use_container_width=True):
+                if st.button(pg, key=f"nav_{pg}", width='stretch'):
                     st.session_state.page = pg
                     st.session_state.export_done = False
                     st.rerun()
@@ -1009,7 +997,7 @@ def render_sidebar():
 </div>""", unsafe_allow_html=True)
 
         # ── Sign out ──────────────────────────────────────
-        if st.button("Sign out", key="btn_signout", use_container_width=True):
+        if st.button("Sign out", key="btn_signout", width='stretch'):
             st.session_state.pop("sw_auth", None)
             st.rerun()
 
@@ -1089,12 +1077,12 @@ def render_topbar(last_evt: str):
         b1, b2, b3 = st.columns(3)
         with b1:
             if st.button("ⓘ", key="btn_info", help="Glossary",
-                         use_container_width=True):
+                         width='stretch'):
                 st.session_state["show_glossary"] = not st.session_state.get("show_glossary", False)
                 st.rerun()
         with b2:
             if st.button(mode_icon, key="btn_theme", help=mode_tip,
-                         use_container_width=True):
+                         width='stretch'):
                 new_theme = "light" if cur_theme == "dark" else "dark"
                 st.session_state["theme_choice"] = new_theme
                 if new_theme == "light":
@@ -1110,7 +1098,7 @@ def render_topbar(last_evt: str):
                 st.rerun()
         with b3:
             if st.button("⟳", key="btn_refresh", help="Refresh data",
-                         use_container_width=True):
+                         width='stretch'):
                 st.cache_data.clear()
                 st.rerun()
 
@@ -1660,7 +1648,7 @@ def page_home():
                     bordercolor=s.BORDER,
                 ),
             )
-            st.plotly_chart(fig, use_container_width=True,
+            st.plotly_chart(fig, width='stretch',
                             config={"displayModeBar": False})
             st.markdown(f"""
 <div style="font-size:11px;color:{s.MUTED};font-family:'DM Mono',monospace;
@@ -1957,7 +1945,7 @@ def page_history():
                 yaxis=dict(gridcolor=s.BORDER, tickfont=dict(size=9, color=s.FG),
                            title=dict(text="Minutes", font=dict(size=9, color=s.FG))),
             )
-            st.plotly_chart(fig_lat, use_container_width=True, config={"displayModeBar": False})
+            st.plotly_chart(fig_lat, width="stretch", config={"displayModeBar": False})
             st.markdown(
                 f"<div style='font-size:11px;color:{s.MUTED};"
                 f"font-family:DM Mono,monospace;margin-top:4px;'>"
@@ -2021,7 +2009,7 @@ def page_history():
             xaxis=dict(side="top", tickfont=dict(color=s.FG, size=11), linecolor=s.BORDER),
             yaxis=dict(tickfont=dict(color=s.FG, size=11), linecolor=s.BORDER),
         )
-        st.plotly_chart(fig_hm, use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(fig_hm, width="stretch", config={"displayModeBar": False})
         st.markdown(
             f"<div style='font-size:11px;color:{s.MUTED};"
             f"font-family:DM Mono,monospace;margin-top:4px;'>"
@@ -2106,7 +2094,7 @@ def page_history():
                     hovertemplate="<b>%{x} 2024</b><br>Total ha: %{y:,}<extra></extra>",
                 )
             fig.update_layout(height=360)
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+            st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
     with fc:
         with st.container(border=True):
@@ -2127,7 +2115,7 @@ def page_history():
             sb = st.columns(4)
             for col, state in zip(sb, ["All", "Jonglei", "Unity", "Upper Nile"]):
                 lbl = {"All":"All","Jonglei":"Jon.","Unity":"Uni.","Upper Nile":"U.N."}[state]
-                if col.button(lbl, key=f"hs_{state}", use_container_width=True,
+                if col.button(lbl, key=f"hs_{state}", width="stretch",
                               type="primary" if ss.hist_state == state else "secondary",
                               help=state):
                     ss.hist_state = state
@@ -2144,7 +2132,7 @@ def page_history():
             min_pop = st.number_input("pop", 0, value=ss.hist_min_pop, step=100,
                                       label_visibility="collapsed", key="pop_ni")
             st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
-            if st.button("⌕ Apply Filters", key="apply_f", use_container_width=True, type="primary"):
+            if st.button("⌕ Apply Filters", key="apply_f", width="stretch", type="primary"):
                 ss.hist_start   = start_d
                 ss.hist_end     = end_d
                 ss.hist_min_iou = min_iou
@@ -2325,19 +2313,19 @@ def page_history():
                         "⬇ GeoJSON", data=geo_data,
                         file_name=f"{evt['id']}_flood_extent.geojson",
                         mime="application/geo+json",
-                        key=f"geo_{rk}", use_container_width=True,
+                        key=f"geo_{rk}", width="stretch",
                     )
                     b2.download_button(
                         "⬇ PDF Report", data=pdf_data,
                         file_name=f"{evt['id']}_situation_report.txt",
                         mime="text/plain",
-                        key=f"pdf_{rk}", use_container_width=True,
+                        key=f"pdf_{rk}", width="stretch",
                     )
                     b3.download_button(
                         "⬇ CSV Data", data=csv_data,
                         file_name=f"{evt['id']}_data.csv",
                         mime="text/csv",
-                        key=f"csv_{rk}", use_container_width=True,
+                        key=f"csv_{rk}", width="stretch",
                     )
 
     # ── Pagination ─────────────────────────────────────────
@@ -2355,15 +2343,15 @@ def page_history():
             num_cols = 2 + min(total_pages, 5)  # prev + pages + next
             pg = st.columns(num_cols)
             with pg[0]:
-                if st.button("‹", key="h_prev", disabled=(cur_page<=1), use_container_width=True):
+                if st.button("‹", key="h_prev", disabled=(cur_page<=1), width="stretch"):
                     ss.hist_page = cur_page - 1; st.rerun()
             for i in range(1, min(total_pages, 5) + 1):
                 with pg[i]:
-                    if st.button(str(i), key=f"h_p{i}", use_container_width=True,
+                    if st.button(str(i), key=f"h_p{i}", width="stretch",
                                  type="primary" if i==cur_page else "secondary"):
                         ss.hist_page = i; st.rerun()
             with pg[-1]:
-                if st.button("›", key="h_next", disabled=(cur_page>=total_pages), use_container_width=True):
+                if st.button("›", key="h_next", disabled=(cur_page>=total_pages), width="stretch"):
                     ss.hist_page = cur_page + 1; st.rerun()
 
 
@@ -2437,7 +2425,7 @@ def page_performance():
                     yaxis=dict(gridcolor="rgba(48,54,61,0.8)", tickfont=dict(size=10, color=s.MUTED),
                                title=dict(text="Minutes", font=dict(size=10, color=s.MUTED))),
                 ))
-                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
         with c2:
             stages  = ["Data Acq", "Preproc", "Detection", "Risk Ass", "Alerting"]
@@ -2470,7 +2458,7 @@ def page_performance():
                                title=dict(text="Seconds", font=dict(size=10, color=s.MUTED))),
                     showlegend=False,
                 ))
-                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
@@ -2563,7 +2551,7 @@ def page_performance():
                                tickfont=dict(size=10, color=s.MUTED),
                                title=dict(text="IoU Score", font=dict(size=10, color=s.MUTED))),
                 ))
-                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
         with c2:
             with st.container(border=True):
@@ -2604,7 +2592,7 @@ def page_performance():
                     yaxis=dict(range=[0.55, 0.85], title=dict(text="IoU Score", font=dict(size=10, color=s.MUTED)),
                                gridcolor="rgba(48,54,61,0.8)", tickfont=dict(size=10, color=s.MUTED)),
                 ))
-                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
         # Alert delivery bars
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
@@ -2671,7 +2659,7 @@ def page_performance():
                     legend=dict(orientation="h", y=-0.2, font=dict(size=10),
                                 bgcolor="rgba(0,0,0,0)"),
                 ))
-                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
         with c2:
             thresholds = [
@@ -2774,7 +2762,7 @@ def page_performance():
                            gridcolor="rgba(0,0,0,0)"),
                 margin=dict(l=120, r=60, t=40, b=10),
             ))
-            st.plotly_chart(fig_h, use_container_width=True, config={"displayModeBar": False})
+            st.plotly_chart(fig_h, width="stretch", config={"displayModeBar": False})
 
             # Insight callout
             st.markdown(
@@ -2862,7 +2850,7 @@ def page_export():
                     # Render as styled HTML row — clicking the button toggles selection
                     if st.button(
                         f"{chk}  {evt['id']} · {evt['date_utc'][:10]} · {evt['county']}",
-                        key=f"ev_{ei}_{evt['id']}", use_container_width=True,
+                        key=f"ev_{ei}_{evt['id']}", width="stretch",
                         type="primary" if sel else "secondary",
                     ):
                         if sel: st.session_state.export_events.discard(evt["id"])
@@ -2938,7 +2926,7 @@ div[data-testid="stSelectbox"] [class*="singleValue"] {{
                     f"margin-left:14px;'>{fdesc}</div></div>",
                     unsafe_allow_html=True,
                 )
-                if st.button(f"Select {fname_opt}", key=f"fmt_{fi}", use_container_width=True):
+                if st.button(f"Select {fname_opt}", key=f"fmt_{fi}", width="stretch"):
                     st.session_state.export_fmt = fname_opt
                     st.session_state.export_done = False
                     st.rerun()
@@ -3054,7 +3042,7 @@ div[data-testid="stSelectbox"] [class*="singleValue"] {{
                     unsafe_allow_html=True,
                 )
                 if st.button("⬇ Generate Export", key="gen_exp",
-                             use_container_width=True, type="primary"):
+                             width="stretch", type="primary"):
                     with st.spinner("Preparing export…"):
                         import time; time.sleep(1)
                     st.session_state.export_done = True
@@ -3109,9 +3097,9 @@ div[data-testid="stSelectbox"] [class*="singleValue"] {{
                 st.download_button(
                     f"⬇ Download {ext}", data=data,
                     file_name=fname, mime=mime,
-                    key="do_dl", use_container_width=True,
+                    key="do_dl", width="stretch",
                 )
-                if st.button("↺ Reset", key="reset_exp", use_container_width=True):
+                if st.button("↺ Reset", key="reset_exp", width="stretch"):
                     st.session_state.export_done = False
                     st.rerun()
 
@@ -3178,7 +3166,7 @@ div[data-testid="stSelectbox"] [class*="singleValue"] {{
         with c6:
             st.download_button(
                 "⬇ Re-download", data=fdata, file_name=fname, mime=fmime,
-                key="redl_" + str(h["id"]), use_container_width=True,
+                key="redl_" + str(h["id"]), width="stretch",
             )
         st.markdown(f"<hr style='margin:4px 0;border-color:rgba(48,54,61,0.4);'>",
                     unsafe_allow_html=True)
@@ -3414,18 +3402,6 @@ def render_intelligence_feed():
 # MAIN
 # ════════════════════════════════════════════════════════════
 
-# Session state defaults
-for _k, _v in {
-    "page": "Home", "hist_state": "All",
-    "hist_min_iou": 0.65, "hist_min_pop": 0,
-    "export_scope": "Single Event", "export_fmt": "GeoJSON",
-    "export_layers": {"Flood Extent Polygon","Affected Villages","Health Facilities at Risk"},
-    "export_events": {"EVT-2025-047"}, "export_done": False,
-    "show_glossary": False, "theme_choice": "dark",
-}.items():
-    if _k not in st.session_state:
-        st.session_state[_k] = _v
-
 # Global readability + anti-flash CSS — runs on every rerun
 st.markdown("""<style>
 *,*::before,*::after{transition:none!important;animation:none!important;}
@@ -3466,6 +3442,7 @@ html,body,[data-testid="stApp"],[data-testid="stAppViewContainer"]{{
     background:{s.BG}!important;}}
 [data-testid="stVerticalBlock"]{{background:{s.BG}!important;}}
 iframe{{display:none!important;}}
+*{{transition:none!important;}}
 </style>""", unsafe_allow_html=True)
 
         # Full-screen centered container — no columns so no shrink on rerun
@@ -3494,7 +3471,7 @@ section[data-testid="stMain"] > div {{min-height:100vh;}}
                                 placeholder="you@organisation.org")
                     _pass   = st.text_input("Password", type="password")
                     _submit = st.form_submit_button("Sign in",
-                                use_container_width=True)
+                                width='stretch')
                 if _submit:
                     _u = DEMO_USERS.get(_email.strip().lower())
                     if _u and _u["password"] == _pass:
@@ -3537,7 +3514,7 @@ section[data-testid="stMain"] > div {{min-height:100vh;}}
                     _ru_pw2   = st.text_input("Confirm password",
                                               type="password")
                     _ru_sub   = st.form_submit_button("Submit request",
-                                    use_container_width=True)
+                                    width='stretch')
                     if _ru_sub:
                         if not all([_ru_name, _ru_org, _ru_email, _ru_pw]):
                             st.error("Please fill in all fields.")
@@ -3552,7 +3529,7 @@ section[data-testid="stMain"] > div {{min-height:100vh;}}
 
             st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
             if st.button("← Back to home", key="sw_back",
-                         use_container_width=True):
+                         width='stretch'):
                 st.session_state.pop("sw_page", None)
                 st.rerun()
 
@@ -3886,11 +3863,11 @@ elif page == "Admin":
 </div>""", unsafe_allow_html=True)
                 with _rc2:
                     if st.button("Approve", key=f"approve_{_r['email']}",
-                                 type="primary", use_container_width=True):
+                                 type="primary", width="stretch"):
                         st.success(f"Approved {_r['name']}")
                 with _rc3:
                     if st.button("Reject", key=f"reject_{_r['email']}",
-                                 use_container_width=True):
+                                 width="stretch"):
                         st.warning(f"Rejected {_r['name']}")
                 st.markdown(f"<div style='height:1px;background:{s.BORDER};'></div>",
                             unsafe_allow_html=True)
@@ -3920,7 +3897,7 @@ elif page == "Admin":
                     value="+211921000001 - Chief Maker Deng\n"
                           "+211921000002 - Chief Nyakuoth Riek\n"
                           "+211921000003 - Chief Peter Thon")
-                if st.button("Save SMS list", key="save_sms", use_container_width=True):
+                if st.button("Save SMS list", key="save_sms", width="stretch"):
                     st.success("SMS recipient list saved.")
 
             st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
@@ -3938,7 +3915,7 @@ elif page == "Admin":
                 _email_list = st.text_area("Email", height=120, key="admin_email",
                     label_visibility="collapsed",
                     value="ocha.ssd@un.org\nreach.ssd@reach-initiative.org\nmsf.juba@msf.org")
-                if st.button("Save email list", key="save_email", use_container_width=True):
+                if st.button("Save email list", key="save_email", width="stretch"):
                     st.success("Email recipient list saved.")
 
         with a2:
@@ -3968,7 +3945,7 @@ elif page == "Admin":
 </div>""", unsafe_allow_html=True)
                 st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
                 if st.button("Save thresholds", key="save_thresh",
-                             type="primary", use_container_width=True):
+                             type="primary", width="stretch"):
                     st.success("Thresholds saved.")
 
             st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
@@ -3985,7 +3962,7 @@ elif page == "Admin":
   </div>
 </div>""", unsafe_allow_html=True)
                 if st.button("Send test alert", key="test_alert",
-                             use_container_width=True):
+                             width="stretch"):
                     with st.spinner("Sending…"):
                         import time; time.sleep(1)
                     st.success("Test alert sent to all recipients.")
@@ -4053,7 +4030,7 @@ elif page == "Admin":
                     key="dry_run")
                 st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
                 if st.button("Run pipeline now", key="run_pipeline",
-                             type="primary", use_container_width=True):
+                             type="primary", width="stretch"):
                     with st.spinner("Initiating pipeline…"):
                         import time; time.sleep(1.5)
                     st.success("Pipeline run queued. "
@@ -4073,7 +4050,7 @@ elif page == "Admin":
                 _area_t = st.slider("Minimum area (ha)",
                     50, 1000, 200, 50, key="cal_area")
                 if st.button("Apply calibration", key="apply_cal",
-                             use_container_width=True):
+                             width="stretch"):
                     st.success("Calibration applied to next run.")
 
     # ══════════════════════════════════════════════════════════
@@ -4236,10 +4213,10 @@ elif page == "Admin":
                     ["2025 Flood Season","2024 Flood Season"],
                     key="active_season")
                 if st.button("Set active season", key="set_season",
-                             use_container_width=True):
+                             width="stretch"):
                     st.success(f"{_season} set as active.")
                 st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
                 if st.button("Clear all caches", key="clear_cache",
-                             use_container_width=True):
+                             width="stretch"):
                     st.cache_data.clear()
                     st.success("All caches cleared.")
