@@ -233,8 +233,11 @@ class TestCredentialValidation:
             # Should not log warnings
             assert "Missing credentials" not in caplog.text
 
-    def test_warning_on_missing_snap_gpt(self, tmp_path, caplog):
+    def test_warning_on_missing_snap_gpt(self, tmp_path, caplog, monkeypatch):
         """Config should log warning when SNAP GPT is missing."""
+        # Point at a path that cannot exist, so the test also passes on
+        # machines where SNAP is installed at the default location.
+        monkeypatch.setenv("SNAP_GPT_PATH", str(tmp_path / "no_snap" / "gpt"))
         with patch('src.config.PROJECT_ROOT', tmp_path):
             import logging
             caplog.set_level(logging.WARNING)
