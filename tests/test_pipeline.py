@@ -25,9 +25,15 @@ from src.config import Config
 
 # ── Fixtures ──────────────────────────────────────────────────
 @pytest.fixture
-def cfg():
-    """Real config loaded from .env"""
-    return Config()
+def cfg(request):
+    """
+    Isolated config (temporary project root, test credentials, two SMS and
+    two email recipients) so tests never touch the real database or send
+    real messages. Integration tests get the real Config() from .env.
+    """
+    if request.node.get_closest_marker("integration"):
+        return Config()
+    return request.getfixturevalue("test_config")
 
 
 @pytest.fixture
@@ -272,7 +278,8 @@ class TestSMSDispatch:
             mock_client.return_value.messages.create.return_value = mock_msg
             results = alerter.send_sms("test message", "EVT-001", mock_db)
         assert len(results) == len(cfg.sms_recipients)
-        assert results[0]["status"] == "delivered"
+        # "sent" = accepted by Twilio (not a handset delivery receipt)
+        assert results[0]["status"] == "sent"
         assert results[0]["sid"] == "SM123456"
 
     def test_sms_marked_failed_on_twilio_error(self, cfg, mock_db):
@@ -333,7 +340,7 @@ class TestEmailDispatch:
                 "EVT-001", mock_db
             )
         assert len(results) == len(cfg.email_recipients)
-        assert results[0]["status"] == "delivered"
+        assert results[0]["status"] == "sent"
 
     def test_email_failed_on_smtp_error(self, cfg, mock_db):
         from src.alerts import AlertManager
@@ -462,24 +469,30 @@ class TestTimedStage:
 class TestComputeIoU:
     """Tests for _compute_iou() fallback behaviour."""
 
-    def test_returns_placeholder_when_no_reference(self, cfg):
+    def test_returns_none_when_no_reference(self, cfg):
+        """No reference mask → no IoU (previously a fake 0.71 was returned)."""
         from src.pipeline import FloodPipeline
         pipeline = FloodPipeline(cfg)
-        # No reference mask exists for this scene
         iou = pipeline._compute_iou(Path("/tmp/nonexistent.tif"), "FAKE_SCENE_999")
-        assert iou == 0.71
+        assert iou is None
 
-    def test_iou_is_float(self, cfg):
+    def test_iou_computed_against_reference(self, cfg):
+        import numpy as np
+        import rasterio
+        from rasterio.transform import from_bounds
         from src.pipeline import FloodPipeline
         pipeline = FloodPipeline(cfg)
-        iou = pipeline._compute_iou(Path("/tmp/x.tif"), "FAKE_SCENE")
-        assert isinstance(iou, float)
-
-    def test_iou_in_valid_range(self, cfg):
-        from src.pipeline import FloodPipeline
-        pipeline = FloodPipeline(cfg)
-        iou = pipeline._compute_iou(Path("/tmp/x.tif"), "FAKE_SCENE")
-        assert 0.0 <= iou <= 1.0
+        t = from_bounds(31.0, 7.0, 31.01, 7.01, 10, 10)
+        pred = np.zeros((10, 10), np.uint8); pred[:, :6] = 1     # 60 px
+        ref = np.zeros((10, 10), np.uint8);  ref[:, 2:8] = 1     # 60 px, overlap 40
+        mask_path = cfg.masks_dir / "S_TEST_flood_mask.tif"
+        ref_path = cfg.reference_masks_dir / "S_TEST_reference.tif"
+        for path, arr in [(mask_path, pred), (ref_path, ref)]:
+            with rasterio.open(str(path), "w", driver="GTiff", height=10, width=10, count=1,
+                               dtype="uint8", crs="EPSG:4326", transform=t, nodata=255) as d:
+                d.write(arr, 1)
+        iou = pipeline._compute_iou(mask_path, "S_TEST")
+        assert iou == pytest.approx(40 / 80)
 
 
 class TestPipelineRun:
@@ -607,3 +620,37 @@ class TestAlertConnectivity:
         assert result["twilio"] is True
         assert result["smtp"] is True
         assert result["errors"] == []
+
+
+class TestAlertFixes:
+    """Regression tests for alert issues fixed in the November 2026 review."""
+
+    def test_sms_has_no_localhost_link(self, cfg, sample_risk):
+        from src.alerts import AlertManager
+        sms = AlertManager(cfg)._format_sms(sample_risk, "EVT-2026-001")
+        assert "localhost" not in sms
+
+    def test_sms_includes_dashboard_url_when_configured(self, cfg, sample_risk):
+        from src.alerts import AlertManager
+        cfg.dashboard_url = "https://suddwatch.example.org"
+        assert "https://suddwatch.example.org" in AlertManager(cfg)._format_sms(sample_risk, "E1")
+
+    def test_dry_run_sends_nothing_but_logs(self, cfg, sample_risk, mock_db):
+        from src.alerts import AlertManager
+        alerter = AlertManager(cfg)
+        with patch.object(alerter, "_get_twilio_client") as tw:
+            result = alerter.send_flood_alert(sample_risk, 42, mock_db,
+                                              event_label="EVT-2026-042", dry_run=True)
+        tw.assert_not_called()
+        assert result["total_sent"] == 0
+        assert mock_db.insert_alert.call_count == 4          # 2 SMS + 2 email
+        assert mock_db.insert_alert.call_args[0][0] == 42    # integer event id
+        assert "EVT-2026-042" in result["sms_text"]
+
+    def test_thresholds_read_from_config(self, cfg):
+        from src.alerts import AlertManager
+        cfg.alert_flood_threshold_ha = 5000
+        cfg.alert_population_threshold = 999999
+        triggered, _ = AlertManager(cfg).should_alert(
+            {"flood_extent_ha": 1200, "affected_population_estimate": 6637})
+        assert triggered is False

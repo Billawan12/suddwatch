@@ -28,11 +28,32 @@ except Exception as _db_err:
     for _fn in ["get_active_event","get_villages","get_roads",
                 "get_health_facilities","get_alerts","get_data_sources",
                 "get_state_breakdown","get_all_events","get_season_monthly",
-                "get_performance_rows","get_download_history"]:
+                "get_performance_rows","get_download_history",
+                "get_performance_summary","data_mode","get_alert_counts"]:
         setattr(db, _fn, lambda *a, **k: [] if "event" not in _fn else {})
     import streamlit as st
     st.error(f"Database module failed to load: {_db_err}")
 import styles as s
+import auth
+import admin_actions as admin
+import exporter
+
+
+def fmt_iou(v) -> str:
+    """IoU for display — None means no reference mask exists (not validated)."""
+    return f"{v:.2f}" if isinstance(v, (int, float)) else "not validated"
+
+
+def _stage_badge(status: str) -> tuple:
+    """Badge (text, style) for an admin.stage_status() status."""
+    return {"Operational": ("OK", "OK"), "No runs yet": ("READY", "INFO"),
+            "Degraded": ("DEGRADED", "WARNING"),
+            "Not configured": ("SETUP", "WARNING")}.get(status, (status, "INFO"))
+
+
+def fmt_num(v, suffix: str = "") -> str:
+    """Thousands-separated number, or '—' when unknown."""
+    return f"{v:,}{suffix}" if isinstance(v, (int, float)) else "—"
 
 # ── Dynamic theme patcher ─────────────────────────────────────────────────
 # Patches the static styles module constants based on user theme preference.
@@ -62,6 +83,16 @@ def _cached_season_monthly():     return db.get_season_monthly()
 def _cached_performance_rows():   return db.get_performance_rows()
 @st.cache_data(ttl=60, show_spinner=False)
 def _cached_download_history():   return db.get_download_history()
+@st.cache_data(ttl=60, show_spinner=False)
+def _cached_data_mode():
+    try:
+        return db.data_mode()
+    except Exception:
+        return "demo"
+@st.cache_data(ttl=120, show_spinner=False)
+def _cached_perf_summary():       return db.get_performance_summary()
+@st.cache_data(ttl=300, show_spinner=False)
+def _cached_flood_polygons():     return exporter.flood_polygons()
 # Note: s.GLOBAL_CSS is injected inside main() AFTER apply_theme()
 # so it always reflects the current theme choice.
 
@@ -297,6 +328,27 @@ def render_map(t, event=None, villages=None, roads=None, hf=None, alerts=None):
     lg_coord    = folium.FeatureGroup(name="UN/NGO Sites",       show=True)
     lg_alerts   = folium.FeatureGroup(name="Alert Recipients",   show=False)
     lg_scan     = folium.FeatureGroup(name="Satellite Coverage", show=False)
+
+    # ── 0. DETECTED FLOOD EXTENT (latest pipeline mask) ───────
+    if _cached_data_mode() == "real":
+        try:
+            _polys = _cached_flood_polygons()
+        except Exception:
+            _polys = []
+        if _polys:
+            lg_detected = folium.FeatureGroup(name="Detected Flood (latest scene)", show=True)
+            folium.GeoJson(
+                {"type": "FeatureCollection",
+                 "features": [{"type": "Feature", "geometry": g, "properties": {}} for g in _polys]},
+                style_function=lambda _f: {"fillColor": "#0ea5e9", "color": "#38bdf8",
+                                           "weight": 1, "fillOpacity": 0.45},
+                tooltip="Flood extent detected by SuddWatch (Sentinel-1)",
+            ).add_to(lg_detected)
+            lg_detected.add_to(m)
+            _all = [pt for g in _polys for ring in g["coordinates"][:1] for pt in ring]
+            if _all:
+                _lons, _lats = [p_[0] for p_ in _all], [p_[1] for p_ in _all]
+                m.fit_bounds([[min(_lats), min(_lons)], [max(_lats), max(_lons)]])
 
     # ── 1. STATE FLOOD ZONES (historical extents) ─────────────
     for zone in [
@@ -1265,13 +1317,13 @@ def page_home():
     breakdown = _cached_state_breakdown()
 
     # ── Hero banner — pulls from live DB ─────────────────────
-    evt_id    = event.get("event_id",   "EVT-2025-047")
-    evt_loc   = event.get("location",   "Bor South, Jonglei State")
-    evt_ha    = event.get("flood_ha",   1200)
-    evt_pop   = event.get("affected",   6637)
-    evt_ts    = event.get("date_utc",   "2025-10-23 14:17 UTC")
-    evt_iou   = event.get("iou",        0.71)
-    evt_lat   = event.get("latency_min",45)
+    evt_id    = event.get("id",         "No events yet")
+    evt_loc   = event.get("location",   "Awaiting first pipeline run")
+    evt_ha    = event.get("flood_ha",   0)
+    evt_pop   = event.get("affected",   0)
+    evt_ts    = event.get("date_utc",   "—")
+    evt_iou   = fmt_iou(event.get("iou"))
+    evt_lat   = event.get("latency_min", 0)
 
     from datetime import datetime, timezone
     _now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -1347,21 +1399,29 @@ def page_home():
 
     render_sat_timeline()
     cols = st.columns(6, gap="small")
+    # KPI cards — computed from the event history (real or demo data)
+    _hist   = list(reversed((_cached_all_events() or [])[:6]))     # oldest → newest
+    _latest = event or {}
+    _acount = db.get_alert_counts()
+    _alerts_sent = _acount.get("SMS sent", 0) + _acount.get("Email sent", 0)
+    _ious   = [e["iou"] for e in _hist if e.get("iou") is not None]
+    _states = {b.get("state") for b in breakdown if b.get("state")}
     kpis = [
-        ("TOTAL FLOOD EXTENT", "2,220 ha",   "across 3 states",   s.ACCENT),
-        ("AFFECTED POPULATION","7,990",       "est. at risk",      s.WARNING),
-        ("ACTIVE ALERTS",      "41",          "24h window",        s.DANGER),
-        ("AVG ALERT LATENCY",  "45 min",      "vs 60 min SLA",     s.SUCCESS),
-        ("DETECTION IOU",      "0.71",        "last acquisition",  s.SUCCESS),
-        ("SEASON EVENTS",      "47",          "2025 flood season", s.FG),
+        ("TOTAL FLOOD EXTENT", fmt_num(_latest.get("flood_ha"), " ha"),
+         f"across {len(_states)} state(s)" if _states else "latest event", s.ACCENT),
+        ("AFFECTED POPULATION", fmt_num(_latest.get("affected")), "est. at risk", s.WARNING),
+        ("ALERTS SENT", fmt_num(_alerts_sent), "all events", s.DANGER),
+        ("ALERT LATENCY", fmt_num(_latest.get("latency_min"), " min"), "vs 60 min SLA",
+         s.SUCCESS if (_latest.get("latency_min") or 0) <= 60 else s.WARNING),
+        ("DETECTION IOU", fmt_iou(_latest.get("iou")) if _latest.get("iou") is not None else "—",
+         "latest event" if _latest.get("iou") is not None else "not validated", s.SUCCESS),
+        ("EVENTS", fmt_num(len(_cached_all_events() or [])), "recorded", s.FG),
     ]
     spark_data = {
-        "TOTAL FLOOD EXTENT":  [980, 1100, 850, 1400, 1200, 2220],
-        "AFFECTED POPULATION": [3800, 4200, 3100, 5500, 5000, 7990],
-        "ACTIVE ALERTS":       [24, 31, 18, 38, 28, 41],
-        "AVG ALERT LATENCY":   [52, 48, 44, 56, 50, 45],
-        "DETECTION IOU":       [0.68, 0.71, 0.74, 0.66, 0.70, 0.71],
-        "SEASON EVENTS":       [8, 10, 11, 9, 12, 47],
+        "TOTAL FLOOD EXTENT":  [e.get("flood_ha", 0) for e in _hist],
+        "AFFECTED POPULATION": [e.get("affected", 0) for e in _hist],
+        "ALERT LATENCY":       [e.get("latency_min", 0) for e in _hist],
+        "DETECTION IOU":       _ious,
     }
     # Trend arrows — compare last two spark values
     def _trend(vals):
@@ -1405,12 +1465,13 @@ def page_home():
                    hf=hf,
                    alerts=alerts)
         # Human cost annotation strip below map
+        _marks = ["①", "②", "③", "④"]
         annotations = [
-            ("①", "Bor South",   "12,400 people",   "Evacuation in progress", s.DANGER),
-            ("②", "Bentiu IDP",  "109,000 displaced","Dyke risk — monitor",    s.WARNING),
-            ("③", "Akobo East",  "8,200 people",     "Road access cut off",    s.WARNING),
-            ("④", "Leer County", "50,000 people",    "All payams submerged",   s.DANGER),
-        ]
+            (_marks[k], v.get("village", "—"), f"{fmt_num(v.get('population'))} people",
+             v.get("action", "Monitor"),
+             s.DANGER if (v.get("risk_pct") or 0) >= 75 else s.WARNING)
+            for k, v in enumerate((villages or [])[:4])
+        ] or [("·", "No affected villages", "—", "No settlements in or near flood water", s.MUTED)]
         ann_html = "".join(
             f"<div style='display:flex;align-items:flex-start;gap:8px;padding:6px 10px;"
             f"border-left:2px solid {color};background:rgba(7,17,26,0.6);border-radius:0 3px 3px 0;'>"
@@ -1435,20 +1496,30 @@ def page_home():
         )
     with panel_col:
         st.markdown(s.card_wrap(
-            s.section_label("Active Event · EVT-2025-047")
-            + s.progress_bar("Flood extent",     1200/3000, s.ACCENT,   "1,200 ha")
-            + s.progress_bar("Affected pop.",     5000/10000,s.WARNING,  "5,000")
-            + s.progress_bar("Alerts sent",       24/50,     s.FG,       "24")
-            + s.progress_bar("Detection latency", 45/60,     s.SUCCESS,  "45 min"),
+            s.section_label(f"Active Event · {evt_id}")
+            + s.progress_bar("Flood extent",  min((evt_ha or 0) / 3000, 1), s.ACCENT,
+                             fmt_num(evt_ha, " ha"))
+            + s.progress_bar("Affected pop.", min((evt_pop or 0) / 10000, 1), s.WARNING,
+                             fmt_num(evt_pop))
+            + s.progress_bar("Alerts sent",   min(_alerts_sent / 50, 1), s.FG,
+                             fmt_num(_alerts_sent))
+            + s.progress_bar("Alert latency", min((evt_lat or 0) / 60, 1),
+                             s.SUCCESS if (evt_lat or 0) <= 60 else s.WARNING,
+                             fmt_num(evt_lat, " min")),
             "padding:12px"
         ), unsafe_allow_html=True)
 
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
         st.markdown(s.card_wrap(
             s.section_label("Detection QA")
-            + s.progress_bar("IoU score",   0.71, s.SUCCESS)
-            + s.progress_bar("Confidence",  0.84, s.ACCENT)
-            + s.progress_bar("Cloud cover", 0.12, s.WARNING),
+            + s.progress_bar("IoU vs reference mask",
+                             _latest.get("iou") or 0,
+                             s.SUCCESS if (_latest.get("iou") or 0) >= 0.65 else s.WARNING,
+                             fmt_iou(_latest.get("iou")))
+            + f'<div style="font-size:11px;color:{s.MUTED};line-height:1.5;">'
+              f'Method: {_latest.get("detection_method", "otsu_gmm")} · '
+              f'Sentinel-1 radar sees through cloud, so cloud cover does not apply. '
+              f'Add a hand-labelled mask to data/reference_masks/ to validate an event.</div>',
             "padding:12px"
         ), unsafe_allow_html=True)
 
@@ -1459,7 +1530,9 @@ def page_home():
             f'<div style="width:6px;height:6px;border-radius:50%;background:{c}"></div>'
             f'<span style="font-family:Inter,sans-serif;font-size:11px;color:{s.MUTED}">{lbl}</span>'
             f'</div><span style="font-family:DM Mono,monospace;font-size:11px;color:{s.FG}">{cnt}</span></div>'
-            for lbl, cnt, c in [("SMS",24,s.SUCCESS),("Email",12,s.ACCENT),("Pending",3,s.WARNING),("Failed",1,s.DANGER)]
+            for lbl, cnt, c in [(k, v, {"SMS sent": s.SUCCESS, "Email sent": s.ACCENT,
+                                        "Dry run": s.WARNING, "Failed": s.DANGER}[k])
+                                for k, v in db.get_alert_counts().items()]
         )
         st.markdown(s.card_wrap(s.section_label("Alert Delivery") + alert_rows, "padding:12px"), unsafe_allow_html=True)
 
@@ -1467,8 +1540,8 @@ def page_home():
         pipe_rows = "".join(
             f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
             f'<span style="font-family:Inter,sans-serif;font-size:11px;color:{s.MUTED}">{stage}</span>'
-            f'{s.badge("OK","OK")}</div>'
-            for stage in ["Data Acquisition","Preprocessing","Flood Detection","Risk Assessment","Alert Dispatch"]
+            f'{s.badge(*_stage_badge(status))}</div>'
+            for stage, status, _detail in admin.stage_status()
         )
         st.markdown(s.card_wrap(s.section_label("Pipeline Status") + pipe_rows, "padding:12px"), unsafe_allow_html=True)
 
@@ -1485,15 +1558,15 @@ def page_home():
             f'{s.badge(row["risk"])}</div>'
             f'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">'
             f'<div><div style="font-size:10px;color:{s.MUTED}">Flood</div>'
-            f'<div style="font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:700;color:{s.ACCENT}">{row["flood_ha"]:,} ha</div></div>'
+            f'<div style="font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:700;color:{s.ACCENT}">{fmt_num(row["flood_ha"], " ha")}</div></div>'
             f'<div><div style="font-size:10px;color:{s.MUTED}">Affected</div>'
-            f'<div style="font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:700;color:{s.WARNING}">{row["affected"]:,}</div></div>'
+            f'<div style="font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:700;color:{s.WARNING}">{fmt_num(row["affected"])}</div></div>'
             f'<div><div style="font-size:10px;color:{s.MUTED}">Alerts</div>'
             f'<div style="font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:700;color:{s.FG}">{row["alerts"]}</div></div>'
             f'</div></div>'
         )
     st.markdown(s.card_wrap(
-        s.card_header("State-Level Breakdown","Current event · 2025-10-23 14:30 UTC")
+        s.card_header("State-Level Breakdown", f"Current event · {evt_ts}")
         + f'<div style="display:flex">{state_html}</div>'
     ), unsafe_allow_html=True)
 
@@ -1535,7 +1608,7 @@ def page_home():
     with t3:
         body = ""
         for h in hf:
-            hserved = f"{h['served']:,}"
+            hserved = fmt_num(h.get("served"))
             body += (
                 f"<tr>"
                 + s.table_cell(h["name"],extra="font-weight:500")
@@ -1606,11 +1679,10 @@ def page_home():
   border-radius:8px;padding:20px;">
   <div style="font-family:'DM Mono',monospace;font-size:11px;
     color:{s.MUTED};text-transform:uppercase;letter-spacing:.06em;
-    margin-bottom:4px;">2025 Flood Season &middot; Monthly Trend</div>
+    margin-bottom:4px;">Flood Season &middot; Monthly Trend</div>
   <div style="font-size:13px;color:{s.FG};margin-bottom:16px;line-height:1.5;">
     Flood extent (blue area) and population at risk (red dashed line)
-    across the 2025 rainy season. Each bar represents one satellite
-    acquisition pass over Greater Upper Nile.
+    per month, summed over all detection events in that month.
   </div>""",
             unsafe_allow_html=True)
 
@@ -1695,9 +1767,9 @@ def page_home():
         if breakdown:
             for b in breakdown:
                 state  = b.get("state", "—")
-                ha     = b.get("flood_ha", 0)
-                pop    = b.get("affected", 0)
-                pct    = min(100, int(ha / 50))  # bar width
+                ha     = b.get("flood_ha")
+                pop    = b.get("affected")
+                pct    = min(100, int((ha or 0) / 50))  # bar width
                 st.markdown(f"""
 <div style="margin-bottom:14px;">
   <div style="display:flex;justify-content:space-between;
@@ -1705,7 +1777,7 @@ def page_home():
     <span style="font-size:13px;font-weight:500;
       color:{s.FG};">{state}</span>
     <span style="font-size:12px;color:{s.MUTED};">
-      {ha:,} ha &middot; {pop:,} people</span>
+      {fmt_num(ha, " ha")} &middot; {fmt_num(pop)} people</span>
   </div>
   <div style="background:{s.BORDER};border-radius:3px;height:5px;">
     <div style="background:{s.ACCENT};width:{pct}%;
@@ -1841,7 +1913,7 @@ def page_history(show_all=True):
     # Apply filters
     filtered = [
         e for e in all_events
-        if e.get("iou", 1.0) >= ss.hist_min_iou
+        if (e.get("iou") is None or e.get("iou") >= ss.hist_min_iou)
         and e.get("affected", 0) >= ss.hist_min_pop
         and (ss.hist_state == "All" or e.get("state") == ss.hist_state)
         and (st.session_state.get("hist_state_filter","All") == "All"
@@ -1856,12 +1928,19 @@ def page_history(show_all=True):
     
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 # ── KPI strip ─────────────────────────────────────────
+    _monthly = _cached_season_monthly() or []
+    _peak = max(_monthly, key=lambda m: m.get("events", 0)) if _monthly else None
+    _maxm = max(_monthly, key=lambda m: m.get("total_ha", 0)) if _monthly else None
     cols = st.columns(4, gap="small")
     for col, (l, v, sub) in zip(cols, [
-        ("TOTAL EVENTS",     "47",       "2025 flood season"),
-        ("PEAK MONTH",       "August",   "12 events recorded"),
-        ("MAX FLOOD EXTENT", "3,400 ha", "Aug 2025 combined"),
-        ("TOTAL AFFECTED",   "31,200",   "cumulative season"),
+        ("TOTAL EVENTS",     f"{len(events):,}",
+         "real pipeline events" if _cached_data_mode() == "real" else "demo data"),
+        ("PEAK MONTH",       _peak["month"] if _peak else "—",
+         f"{_peak['events']} events recorded" if _peak else "no events"),
+        ("MAX FLOOD EXTENT", fmt_num(_maxm.get("total_ha") if _maxm else None, " ha"),
+         f"{_maxm['month']} combined" if _maxm else "no events"),
+        ("TOTAL AFFECTED",   fmt_num(sum(e.get("affected", 0) or 0 for e in events)),
+         "sum over all events"),
     ]):
         col.markdown(s.kpi_tile(l, v, sub), unsafe_allow_html=True)
 
@@ -1881,7 +1960,7 @@ def page_history(show_all=True):
     # ── Worst Event Callout ────────────────────────────────
     if events:
         worst = max(events, key=lambda e: e.get("affected", 0))
-        w_id  = worst.get("event_id", "—")
+        w_id  = worst.get("id", worst.get("event_id", "—"))
         w_ha  = worst.get("flood_ha", 0)
         w_pop = worst.get("affected", 0)
         w_loc = worst.get("location", "—")
@@ -1958,7 +2037,7 @@ def page_history(show_all=True):
     </div>""", unsafe_allow_html=True)
             if filtered:
                 import plotly.graph_objects as go
-                lat_events = [e.get("event_id","?") for e in filtered[:20]]
+                lat_events = [e.get("id", e.get("event_id","?")) for e in filtered[:20]]
                 lat_vals   = [e.get("latency_min", 45) for e in filtered[:20]]
                 _is_light  = st.session_state.get("theme_choice","dark") == "light"
                 _good  = "#2da44e" if _is_light else s.SUCCESS
@@ -2021,7 +2100,8 @@ def page_history(show_all=True):
       </div>
     </div>""", unsafe_allow_html=True)
             import plotly.graph_objects as go
-            _states = ["Jonglei", "Unity", "Upper Nile"]
+            _states = ["Jonglei", "Unity", "Upper Nile"] + sorted(
+                {e.get("state") for e in events if e.get("state")} - {"Jonglei", "Unity", "Upper Nile"})
             _months = ["Jun","Jul","Aug","Sep","Oct","Nov"]
             _grid = {st_: {m: 0 for m in _months} for st_ in _states}
             for e in events:
@@ -2222,7 +2302,8 @@ def page_history(show_all=True):
         for i, evt in enumerate(page_rows):
             dot_c = s.DANGER  if evt["affected"] > 5000 else (s.WARNING if evt["affected"] > 3000 else s.SUCCESS)
             lat_c = s.WARNING if evt["latency_min"] > 55 else (s.SUCCESS if evt["latency_min"] <= 45 else s.FG)
-            iou_c = s.WARNING if evt["iou"] < 0.65 else (s.SUCCESS if evt["iou"] >= 0.70 else s.FG)
+            iou_c = (s.MUTED if evt.get("iou") is None else
+                     s.WARNING if evt["iou"] < 0.65 else (s.SUCCESS if evt["iou"] >= 0.70 else s.FG))
             rk    = f"{cur_page}_{i}_{evt['id']}"
 
             with st.expander(
@@ -2261,7 +2342,7 @@ def page_history(show_all=True):
                     c1, c2, c3, c4 = st.columns(4)
                     for col, lbl, val, vc in [
                         (c1, "Latency",      f"{evt['latency_min']} min", lat_c),
-                        (c2, "IoU",          f"{evt['iou']:.2f}",         iou_c),
+                        (c2, "IoU",          fmt_iou(evt.get("iou")),     iou_c),
                         (c3, "Flood Extent", f"{evt['flood_ha']:,} ha",   s.FG),
                         (c4, "Affected Pop.",f"{evt['affected']:,}",       s.WARNING),
                     ]:
@@ -2291,7 +2372,7 @@ def page_history(show_all=True):
                         )
 
                     # Top affected villages — pulled from demo db for this event
-                    villages = _cached_villages("EVT-2025-047")
+                    villages = _cached_villages(evt.get("event_id", evt["id"]))
                     if villages:
                         vill_str = "  ·  ".join(
                             f"<span style='color:{s.ACCENT};'>●</span> "
@@ -2330,7 +2411,7 @@ def page_history(show_all=True):
                     csv_data = (
                         "event_id,date_utc,latency_min,iou,flood_ha,affected,state,county,"
                         "data_acq_s,preproc_s,flood_det_s,risk_ass_s,alert_s\n"
-                        f"{evt['id']},{evt['date_utc']},{evt['latency_min']},{evt['iou']:.2f},"
+                        f"{evt['id']},{evt['date_utc']},{evt['latency_min']},{fmt_iou(evt.get('iou'))},"
                         f"{evt['flood_ha']},{evt['affected']},{evt['state']},{evt['county']},"
                         f"{evt.get('data_acq_s',120)},{evt.get('preproc_s',900)},"
                         f"{evt.get('flood_det_s',450)},{evt.get('risk_ass_s',300)},"
@@ -2346,7 +2427,7 @@ def page_history(show_all=True):
                         f"\nFLOOD METRICS\n{'-'*40}\n"
                         f"Flood Extent:     {evt['flood_ha']:,} ha\n"
                         f"Affected Pop.:    {evt['affected']:,}\n"
-                        f"Detection IoU:    {evt['iou']:.2f}\n"
+                        f"Detection IoU:    {fmt_iou(evt.get('iou'))}\n"
                         f"Alert Latency:    {evt['latency_min']} min\n"
                         f"\nPIPELINE TIMING\n{'-'*40}\n"
                         f"Data Acquisition: {evt.get('data_acq_s',120)} s\n"
@@ -2354,7 +2435,7 @@ def page_history(show_all=True):
                         f"Flood Detection:  {evt.get('flood_det_s',450)} s\n"
                         f"Risk Assessment:  {evt.get('risk_ass_s',300)} s\n"
                         f"Alert Dispatch:   {evt.get('alert_s',150)} s\n"
-                        f"\nGenerated by SuddWatch v2.4.1 — Sudd Basin\n"
+                        f"\nGenerated by SuddWatch — Sudd Basin\n"
                     )
 
                     b1.download_button(
@@ -2405,13 +2486,26 @@ def page_history(show_all=True):
 
 
 def page_performance():
+    ps   = _cached_perf_summary()
+    _rows = list(reversed(_cached_performance_rows() or []))   # oldest → newest
+    def _pct(v): return f"{v:.1f}%" if isinstance(v, (int, float)) else "—"
     cols = st.columns(5, gap="small")
     for col, (l, v, sub, good) in zip(cols, [
-        ("AVG TOTAL LATENCY",  "48 min", "↓ 12% vs last season", True),
-        ("SLA COMPLIANCE",     "91.5%",  "43 of 47 events",      True),
-        ("AVG IOU SCORE",      "0.71",   "↑ 0.04 vs last season",True),
-        ("ALERT SUCCESS RATE", "91.3%",  "last 30 days",         False),
-        ("SYSTEM UPTIME",      "99.2%",  "30-day rolling",       True),
+        ("AVG TOTAL LATENCY",
+         f"{ps['avg_latency_min']} min" if ps.get("avg_latency_min") is not None else "—",
+         f"over {ps['n_events']} event(s)", (ps.get("avg_latency_min") or 0) <= 60),
+        ("SLA COMPLIANCE", _pct(ps.get("sla_pct")),
+         f"{ps['sla_within']} of {ps['n_events']} ≤ 60 min", (ps.get("sla_pct") or 0) >= 95),
+        ("AVG IOU SCORE",
+         f"{ps['avg_iou']:.2f}" if ps.get("avg_iou") is not None else "—",
+         f"{ps['n_validated']} event(s) with reference mask"
+         if ps.get("n_validated") else "no reference masks yet",
+         (ps.get("avg_iou") or 0) >= 0.65),
+        ("ALERT SUCCESS RATE", _pct(ps.get("alert_success_pct")),
+         f"{ps['alert_total']} message(s) · accepted by Twilio/SMTP",
+         (ps.get("alert_success_pct") or 0) >= 95),
+        ("EVENTS PROCESSED", str(ps.get("n_events", 0)),
+         "real pipeline data" if ps.get("mode") == "real" else "demo data", True),
     ]):
         col.markdown(s.kpi_tile(l, v, sub, s.SUCCESS if good else s.WARNING),
                      unsafe_allow_html=True)
@@ -2429,9 +2523,10 @@ def page_performance():
 </div>""", unsafe_allow_html=True)
     tab1, tab2, tab3, tab4 = st.tabs(["Pipeline Timing", "Detection Quality", "SLA Compliance", "Stage Heatmap"])
 
-    dates  = ["Aug 14", "Sep 02", "Sep 19", "Oct 08", "Oct 23"]
-    lat_y  = [44, 61, 38, 52, 45]
-    iou_y  = [0.74, 0.63, 0.79, 0.68, 0.71]
+    dates  = [str(r.get("date_utc", ""))[:10] for r in _rows]
+    lat_y  = [r.get("latency_min") for r in _rows]
+    iou_y  = [r.get("iou") for r in _rows]          # None = not validated
+    evt_ids = [r.get("id") for r in _rows]
 
     # ── TAB 1: Pipeline Timing ─────────────────────────────
     with tab1:
@@ -2477,9 +2572,11 @@ def page_performance():
 
         with c2:
             stages  = ["Data Acq", "Preproc", "Detection", "Risk Ass", "Alerting"]
-            avg_s   = [131, 916, 482, 314, 155]
-            min_s   = [95,  780, 390, 250, 120]
-            max_s   = [180, 1100, 580, 410, 200]
+            _skeys  = ["data_acq_s", "preproc_s", "flood_det_s", "risk_ass_s", "alert_s"]
+            _cols   = [[r.get(k) or 0 for r in _rows] or [0] for k in _skeys]
+            avg_s   = [round(sum(c) / len(c)) for c in _cols]
+            min_s   = [min(c) for c in _cols]
+            max_s   = [max(c) for c in _cols]
             with st.container(border=True):
                 st.markdown(
                     s.card_header("Avg Stage Duration", "seconds · min / max range"),
@@ -2612,7 +2709,7 @@ def page_performance():
                     x=lat_y, y=iou_y, mode="markers",
                     marker=dict(color=s.ACCENT, size=10,
                                 line=dict(color=s.BG, width=1.5)),
-                    text=["EVT-2025-021","EVT-2025-028","EVT-2025-033","EVT-2025-041","EVT-2025-047"],
+                    text=evt_ids,
                     hovertemplate=(
                         "<b>%{text}</b><br>"
                         "Latency: %{x} min<br>"
@@ -2635,9 +2732,9 @@ def page_performance():
                 fig.update_layout(**_fig(220, showlegend=False,
                     hoverlabel=dict(bgcolor=s.CARD, bordercolor=s.BORDER,
                                     font=dict(family="DM Mono, monospace", size=11)),
-                    xaxis=dict(range=[30, 75], title=dict(text="Latency (min)", font=dict(size=10, color=s.MUTED)),
+                    xaxis=dict(title=dict(text="Latency (min)", font=dict(size=10, color=s.MUTED)),
                                gridcolor="rgba(48,54,61,0.8)", tickfont=dict(size=10, color=s.MUTED)),
-                    yaxis=dict(range=[0.55, 0.85], title=dict(text="IoU Score", font=dict(size=10, color=s.MUTED)),
+                    yaxis=dict(range=[0, 1], title=dict(text="IoU Score", font=dict(size=10, color=s.MUTED)),
                                gridcolor="rgba(48,54,61,0.8)", tickfont=dict(size=10, color=s.MUTED)),
                 ))
                 st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
@@ -2655,12 +2752,16 @@ def page_performance():
             f'<span style="font-family:DM Mono,monospace;font-size:11px;'
             f'color:{s.FG};width:40px;text-align:right">{pct}%</span></div>'
             for lbl, pct in [
-                ("Data Acq", 100), ("Preproc", 100),
-                ("Detection", 97), ("Risk Ass", 95), ("Alerting", 91),
+                (lbl_, v_) for lbl_, key_ in [
+                    ("Data Acq", "data_acquisition"), ("Preproc", "preprocessing"),
+                    ("Detection", "flood_detection"), ("Risk Ass", "risk_assessment"),
+                    ("Alerting", "alert_dispatch")]
+                for v_ in [ps.get("stage_success_pct", {}).get(key_)]
+                if v_ is not None
             ]
         )
         st.markdown(s.card_wrap(
-            s.card_header("Alert Delivery by Stage", "% success rate")
+            s.card_header("Stage Success Rate", "% of runs completed per stage")
             + f'<div style="padding:16px">{bars}</div>'
         ), unsafe_allow_html=True)
 
@@ -2684,9 +2785,9 @@ def page_performance():
                                   "events passing 60-min SLA"),
                     unsafe_allow_html=True,
                 )
-                months  = ["Jun", "Jul", "Aug", "Sep", "Oct"]
-                within  = [5, 8, 10, 9, 6]
-                breach  = [0, 1, 2, 2, 1]
+                months  = [m for m, _, _ in ps.get("sla_by_month", [])]
+                within  = [w for _, w, _ in ps.get("sla_by_month", [])]
+                breach  = [b for _, _, b in ps.get("sla_by_month", [])]
                 fig = go.Figure()
                 fig.add_bar(
                     x=months, y=within, name="Within SLA",
@@ -2710,12 +2811,18 @@ def page_performance():
                 st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
         with c2:
+            _lat_avg = ps.get("avg_latency_min")
+            _iou_avg = ps.get("avg_iou")
+            _alert   = ps.get("alert_success_pct")
             thresholds = [
-                ("Total pipeline latency", "≤ 60 min",  "48 min avg",   True),
-                ("Flood detection IoU",    "≥ 0.65",    "0.71 avg",     True),
-                ("Alert delivery rate",    "≥ 95%",     "91.3%",        False),
-                ("System availability",    "≥ 99%",     "99.2%",        True),
-                ("Data acquisition gap",   "≤ 6 days",  "3.2 days avg", True),
+                ("Total pipeline latency", "≤ 60 min",
+                 f"{_lat_avg} min avg" if _lat_avg is not None else "no data",
+                 _lat_avg is not None and _lat_avg <= 60),
+                ("Flood detection IoU", "≥ 0.65",
+                 f"{_iou_avg:.2f} avg" if _iou_avg is not None else "not validated",
+                 _iou_avg is not None and _iou_avg >= 0.65),
+                ("Alert acceptance rate", "≥ 95%",
+                 _pct(_alert), _alert is not None and _alert >= 95),
             ]
             rows = "".join(
                 f'<div style="display:flex;justify-content:space-between;align-items:center;'
@@ -2726,7 +2833,7 @@ def page_performance():
                 f'<div style="font-family:DM Mono,monospace;font-size:10px;color:{s.MUTED}">'
                 f'Target: {tgt} · Actual: {act}</div>'
                 f'</div>'
-                f'{s.badge("PASS" if passed else "FAIL")}</div>'
+                f'{s.badge("PASS" if passed else ("N/A" if act in ("no data", "not validated", "—") else "FAIL"))}</div>'
                 for metric, tgt, act, passed in thresholds
             )
             st.markdown(s.card_wrap(
@@ -2756,7 +2863,7 @@ def page_performance():
             # Heatmap data — reads from real DB, falls back to demo
             stages_h  = ["Data Acq","Preproc","Flood Det","Risk Ass","Alert"]
             _perf = _cached_performance_rows()
-            if _perf and any(r.get("data_acq_s",0) > 0 for r in _perf):
+            if _perf:
                 events_h = [r["id"] for r in _perf]
                 z_data   = [
                     [r.get("data_acq_s",120), r.get("preproc_s",900),
@@ -3097,8 +3204,18 @@ div[data-testid="stSelectbox"] [class*="singleValue"] {{
                     st.rerun()
             else:
                 st.success("✅ Export ready")
-                # Build actual export data
-                if fmt == "CSV Tabular":
+                # Build actual export data — real pipeline outputs when available
+                _built = None
+                if _cached_data_mode() == "real":
+                    try:
+                        _built = exporter.build(fmt, all_events,
+                                                st.session_state.get("export_layers", set()))
+                    except Exception as _ex_err:
+                        st.warning(f"Could not build {fmt} from pipeline data: {_ex_err}")
+                if _built:
+                    data, fname, mime = _built
+                    ext = Path(fname).suffix
+                elif fmt == "CSV Tabular":
                     buf = io.StringIO()
                     w   = csv.writer(buf)
                     w.writerow(["event_id","date","flood_ha","affected","state","county"])
@@ -3121,7 +3238,6 @@ div[data-testid="stSelectbox"] [class*="singleValue"] {{
                         "SUDDWATCH FLOOD SITUATION REPORT",
                         "=" * 50,
                         f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
-                        f"Season: 2025 Flood Season",
                         "",
                         "EVENTS INCLUDED",
                         "-" * 50,
@@ -3518,13 +3634,14 @@ def page_admin_health():
 
 def _render_admin_users():
     st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
+    _users    = auth.list_users()
+    _requests = auth.list_requests("pending")
 
-    # Summary KPIs
     k1, k2, k3 = st.columns(3)
     for col, label, val, color in [
-        (k1, "Active Accounts",    str(len(DEMO_USERS)), s.SUCCESS),
-        (k2, "Pending Requests",   "2",                  s.WARNING),
-        (k3, "Admin Accounts",     "1",                  s.ACCENT),
+        (k1, "Active Accounts",  str(sum(1 for u in _users if u["active"])), s.SUCCESS),
+        (k2, "Pending Requests", str(len(_requests)),                         s.WARNING),
+        (k3, "Admin Accounts",   str(sum(1 for u in _users if u["role"] == "Admin")), s.ACCENT),
     ]:
         with col:
             st.markdown(f"""
@@ -3539,21 +3656,20 @@ font-weight:700;color:{color};">{val}</div>
 
     st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
 
-    # Active accounts
     with st.container(border=True):
         st.markdown(f"""
 <div style="padding:4px 0 16px;">
   <div style="font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED};
 text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
-Active Accounts</div>
+Accounts</div>
   <div style="font-size:14px;color:{s.FG};">
-All currently active user accounts with their role and access level.
+Accounts stored in dashboard/auth.db (passwords are salted PBKDF2 hashes).
   </div>
 </div>""", unsafe_allow_html=True)
-
-        for _em, _ud in DEMO_USERS.items():
-            _rc    = s.ACCENT if _ud["role"] == "Admin" else s.SUCCESS
-            _init  = _ud["name"][0].upper()
+        for _ud in _users:
+            _rc   = s.ACCENT if _ud["role"] == "Admin" else s.SUCCESS
+            _init = (_ud["name"] or "?")[0].upper()
+            _act  = "Active" if _ud["active"] else "Disabled"
             st.markdown(f"""
 <div style="display:flex;align-items:center;gap:14px;padding:12px 0;
   border-bottom:1px solid {s.BORDER};">
@@ -3562,24 +3678,19 @@ background:{_rc}20;display:flex;align-items:center;
 justify-content:center;font-size:14px;font-weight:600;
 color:{_rc};flex-shrink:0;">{_init}</div>
   <div style="flex:1;">
-<div style="font-size:14px;font-weight:500;color:{s.FG};
-  margin-bottom:2px;">{_ud['name']}</div>
-<div style="font-family:'DM Mono',monospace;font-size:12px;
-  color:{s.MUTED};">{_em}</div>
+<div style="font-size:14px;font-weight:500;color:{s.FG};margin-bottom:2px;">{_ud['name']}</div>
+<div style="font-family:'DM Mono',monospace;font-size:12px;color:{s.MUTED};">{_ud['email']}</div>
   </div>
   <div style="display:flex;align-items:center;gap:8px;">
 <span style="font-size:11px;padding:3px 10px;border-radius:12px;
-  background:{_rc}18;color:{_rc};font-weight:600;">
-  {_ud['role']}</span>
+  background:{_rc}18;color:{_rc};font-weight:600;">{_ud['role']}</span>
 <span style="font-size:11px;padding:3px 10px;border-radius:12px;
-  background:{s.SUCCESS}18;color:{s.SUCCESS};font-weight:600;">
-  Active</span>
+  background:{s.SUCCESS}18;color:{s.SUCCESS};font-weight:600;">{_act}</span>
   </div>
 </div>""", unsafe_allow_html=True)
 
     st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
 
-    # Pending access requests
     with st.container(border=True):
         st.markdown(f"""
 <div style="padding:4px 0 16px;">
@@ -3587,37 +3698,34 @@ color:{_rc};flex-shrink:0;">{_init}</div>
 text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
 Pending Access Requests</div>
   <div style="font-size:14px;color:{s.FG};">
-Users who submitted a request through the Sign Up form. Approve to
-activate their account or reject to decline.
+Submitted through the Request Access form. Approving creates the account
+with the password the requester chose; rejecting declines it.
   </div>
 </div>""", unsafe_allow_html=True)
-
-        _requests = [
-            {"name":"Dr. Amara Nyang","org":"UNICEF South Sudan",
-             "email":"a.nyang@unicef.org","submitted":"2025-10-21","role":"User"},
-            {"name":"James Okello","org":"IOM Juba",
-             "email":"j.okello@iom.int","submitted":"2025-10-22","role":"User"},
-        ]
+        if not _requests:
+            st.caption("No pending requests.")
+        _me = st.session_state.get("sw_auth", {}).get("email", "")
         for _r in _requests:
-            _rc1, _rc2, _rc3 = st.columns([4,1,1])
+            _rc1, _rc2, _rc3 = st.columns([4, 1, 1])
             with _rc1:
                 st.markdown(f"""
 <div style="padding:10px 0;">
   <div style="font-size:14px;font-weight:500;color:{s.FG};margin-bottom:2px;">
-{_r['name']} &nbsp;
-<span style="font-size:12px;font-weight:400;color:{s.MUTED};">
-  {_r['org']}</span></div>
+{_r['name']} &nbsp;<span style="font-size:12px;font-weight:400;color:{s.MUTED};">{_r['org']}</span></div>
   <div style="font-family:'DM Mono',monospace;font-size:12px;color:{s.MUTED};">
-{_r['email']} &middot; Submitted {_r['submitted']}</div>
+{_r['email']} &middot; Submitted {_r['submitted_at']}</div>
 </div>""", unsafe_allow_html=True)
             with _rc2:
-                if st.button("Approve", key=f"approve_{_r['email']}",
+                if st.button("Approve", key=f"approve_{_r['id']}",
                              type="primary", use_container_width=True):
-                    st.success(f"Approved {_r['name']}")
+                    auth.decide_request(_r["id"], True)
+                    admin.record(_me, "USER_APPROVED", f"Access approved for {_r['email']}", "success")
+                    st.rerun()
             with _rc3:
-                if st.button("Reject", key=f"reject_{_r['email']}",
-                             use_container_width=True):
-                    st.warning(f"Rejected {_r['name']}")
+                if st.button("Reject", key=f"reject_{_r['id']}", use_container_width=True):
+                    auth.decide_request(_r["id"], False)
+                    admin.record(_me, "USER_REJECTED", f"Access rejected for {_r['email']}", "warning")
+                    st.rerun()
             st.markdown(f"<div style='height:1px;background:{s.BORDER};'></div>",
                         unsafe_allow_html=True)
 
@@ -3628,95 +3736,94 @@ activate their account or reject to decline.
 
 def _render_admin_alerts():
     st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
+    _me = st.session_state.get("sw_auth", {}).get("email", "")
+    _sms_now, _email_now = admin.get_recipients()
+    _settings = admin.get_settings()
+
+    def _card_title(title, body):
+        st.markdown(f"""
+<div style="padding:4px 0 16px;">
+  <div style="font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED};
+text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">{title}</div>
+  <div style="font-size:14px;color:{s.FG};">{body}</div>
+</div>""", unsafe_allow_html=True)
 
     a1, a2 = st.columns(2, gap="large")
-
     with a1:
         with st.container(border=True):
-            st.markdown(f"""
-<div style="padding:4px 0 16px;">
-  <div style="font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED};
-text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
-SMS Recipients</div>
-  <div style="font-size:14px;color:{s.FG};">
-Phone numbers receiving SMS alerts. One per line, in E.164 format
-(+211XXXXXXXXX).
-  </div>
-</div>""", unsafe_allow_html=True)
+            _card_title("SMS Recipients",
+                        "Phone numbers receiving SMS alerts — one per line, E.164 format "
+                        "(+211XXXXXXXXX). Text after \" - \" (e.g. a name) is ignored. "
+                        "Saved to SMS_RECIPIENTS in .env.")
             _sms = st.text_area("SMS", height=140, key="admin_sms",
-                label_visibility="collapsed",
-                value="+211921000001 - Chief Maker Deng\n"
-                      "+211921000002 - Chief Nyakuoth Riek\n"
-                      "+211921000003 - Chief Peter Thon")
+                                label_visibility="collapsed", value="\n".join(_sms_now))
             if st.button("Save SMS list", key="save_sms", use_container_width=True):
-                st.success("SMS recipient list saved.")
+                try:
+                    saved = admin.save_recipients(sms_text=_sms)
+                    admin.record(_me, "CONFIG_CHANGE", f"SMS recipients: {len(saved['sms'])}", "info")
+                    st.success(f"Saved {len(saved['sms'])} SMS recipient(s).")
+                except ValueError as e:
+                    st.error(str(e))
 
         st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-
         with st.container(border=True):
-            st.markdown(f"""
-<div style="padding:4px 0 16px;">
-  <div style="font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED};
-text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
-Email Recipients</div>
-  <div style="font-size:14px;color:{s.FG};">
-Email addresses for full HTML situation reports.
-  </div>
-</div>""", unsafe_allow_html=True)
+            _card_title("Email Recipients",
+                        "Addresses for the full HTML situation report — one per line. "
+                        "Saved to EMAIL_RECIPIENTS in .env.")
             _email_list = st.text_area("Email", height=120, key="admin_email",
-                label_visibility="collapsed",
-                value="ocha.ssd@un.org\nreach.ssd@reach-initiative.org\nmsf.juba@msf.org")
+                                       label_visibility="collapsed", value="\n".join(_email_now))
             if st.button("Save email list", key="save_email", use_container_width=True):
-                st.success("Email recipient list saved.")
+                try:
+                    saved = admin.save_recipients(email_text=_email_list)
+                    admin.record(_me, "CONFIG_CHANGE", f"Email recipients: {len(saved['email'])}", "info")
+                    st.success(f"Saved {len(saved['email'])} email recipient(s).")
+                except ValueError as e:
+                    st.error(str(e))
 
     with a2:
         with st.container(border=True):
-            st.markdown(f"""
-<div style="padding:4px 0 16px;">
-  <div style="font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED};
-text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
-Alert Thresholds</div>
-  <div style="font-size:14px;color:{s.FG};">
-Alerts are only dispatched when detections meet these minimum thresholds.
-Adjust to reduce false positives.
-  </div>
-</div>""", unsafe_allow_html=True)
-            _min_ha  = st.slider("Minimum flood extent (ha)",
-                100, 2000, 500, 50, key="thresh_ha")
-            _min_pop = st.slider("Minimum people at risk",
-                100, 10000, 1000, 100, key="thresh_pop")
-            _min_iou = st.slider("Minimum IoU score",
-                0.50, 0.95, 0.65, 0.05, key="thresh_iou")
+            _card_title("Alert Thresholds",
+                        "An alert is sent when EITHER threshold is met. Saved to "
+                        "config/runtime_settings.json and used by the next pipeline run.")
+            _min_ha  = st.slider("Minimum flood extent (ha)", 50, 5000,
+                                 int(_settings["alert_flood_threshold_ha"]), 50, key="thresh_ha")
+            _min_pop = st.slider("Minimum people at risk", 100, 20000,
+                                 int(_settings["alert_population_threshold"]), 100, key="thresh_pop")
             st.markdown(f"""
 <div style="background:{s.MUTED_BG};border-radius:6px;padding:12px 14px;
   margin-top:8px;font-size:13px;color:{s.MUTED};line-height:1.6;">
-  Alert fires when: extent ≥ <b style="color:{s.FG};">{_min_ha} ha</b>
-  AND population ≥ <b style="color:{s.FG};">{_min_pop:,}</b>
-  AND IoU ≥ <b style="color:{s.FG};">{_min_iou:.2f}</b>
+  Alert fires when: extent ≥ <b style="color:{s.FG};">{_min_ha:,} ha</b>
+  OR population ≥ <b style="color:{s.FG};">{_min_pop:,}</b>
 </div>""", unsafe_allow_html=True)
             st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-            if st.button("Save thresholds", key="save_thresh",
-                         type="primary", use_container_width=True):
-                st.success("Thresholds saved.")
+            if st.button("Save thresholds", key="save_thresh", type="primary",
+                         use_container_width=True):
+                admin.save_settings(alert_flood_threshold_ha=_min_ha,
+                                    alert_population_threshold=_min_pop)
+                admin.record(_me, "THRESHOLD_CHANGE",
+                             f"Alert thresholds: {_min_ha} ha / {_min_pop} people", "info")
+                st.success("Thresholds saved — used from the next pipeline run.")
 
         st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-
         with st.container(border=True):
-            st.markdown(f"""
-<div style="padding:4px 0 12px;">
-  <div style="font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED};
-text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
-Test Alert</div>
-  <div style="font-size:14px;color:{s.FG};">
-Send a test SMS and email to all recipients without triggering a
-real detection event.
-  </div>
-</div>""", unsafe_allow_html=True)
-            if st.button("Send test alert", key="test_alert",
-                         use_container_width=True):
+            _card_title("Test Alert",
+                        "Sends a real SMS and email marked TEST to every recipient above, "
+                        "using the Twilio and Gmail credentials in .env.")
+            _confirm = st.checkbox("I understand this sends real messages", key="test_confirm")
+            if st.button("Send test alert", key="test_alert", use_container_width=True,
+                         disabled=not _confirm):
                 with st.spinner("Sending…"):
-                    import time; time.sleep(1)
-                st.success("Test alert sent to all recipients.")
+                    _res = admin.send_test_alert()
+                _all = _res["sms"] + _res["email"]
+                _ok = sum(1 for r in _all if r["status"] == "sent")
+                admin.record(_me, "TEST_ALERT", f"{_ok}/{len(_all)} messages accepted",
+                             "success" if _ok == len(_all) and _all else "warning")
+                if not _all:
+                    st.warning("No recipients configured.")
+                for r in _all:
+                    (st.success if r["status"] == "sent" else st.error)(
+                        f"{r['recipient']}: {r['status']}"
+                        + (f" — {r['error']}" if r.get("error") else ""))
 
 # ══════════════════════════════════════════════════════════
 # TAB 3 — PIPELINE CONTROLS
@@ -3725,9 +3832,11 @@ real detection event.
 
 def _render_admin_pipeline():
     st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
+    _me = st.session_state.get("sw_auth", {}).get("email", "")
+    _colors = {"Operational": s.SUCCESS, "No runs yet": s.MUTED,
+               "Degraded": s.WARNING, "Not configured": s.DANGER}
 
     p1, p2 = st.columns([3, 2], gap="large")
-
     with p1:
         with st.container(border=True):
             st.markdown(f"""
@@ -3736,25 +3845,16 @@ def _render_admin_pipeline():
 text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
 Pipeline Stage Status</div>
   <div style="font-size:14px;color:{s.FG};">
-Current health of each automated processing stage. Green = operational,
-amber = degraded, red = failed.
+From the processing log in the pipeline database, plus checks that each
+stage has what it needs (credentials, SNAP, data files).
   </div>
 </div>""", unsafe_allow_html=True)
-
-            _stages = [
-                ("Data Acquisition",     "Operational", s.SUCCESS,  "Last: 2025-10-23 08:12 UTC"),
-                ("Preprocessing (SNAP)", "Operational", s.SUCCESS,  "Avg: 916 s"),
-                ("Flood Detection",      "Operational", s.SUCCESS,  "Last IoU: 0.71"),
-                ("Risk Assessment",      "Operational", s.SUCCESS,  "WorldPop + OSM"),
-                ("Alert Dispatch (SMS)", "Operational", s.SUCCESS,  "Twilio · 3 recipients"),
-                ("Alert Dispatch (Email)","Degraded",   s.WARNING,  "SMTP timeout — retrying"),
-            ]
-            for _name, _status, _col, _detail in _stages:
+            for _name, _status, _detail in admin.stage_status():
+                _col = _colors.get(_status, s.MUTED)
                 st.markdown(f"""
 <div style="display:flex;align-items:center;gap:12px;padding:11px 0;
   border-bottom:1px solid {s.BORDER};">
-  <div style="width:8px;height:8px;border-radius:50%;
-background:{_col};flex-shrink:0;"></div>
+  <div style="width:8px;height:8px;border-radius:50%;background:{_col};flex-shrink:0;"></div>
   <div style="flex:1;">
 <div style="font-size:14px;font-weight:500;color:{s.FG};">{_name}</div>
 <div style="font-size:12px;color:{s.MUTED};font-family:'DM Mono',monospace;
@@ -3764,6 +3864,20 @@ background:{_col};flex-shrink:0;"></div>
 background:{_col}18;color:{_col};font-weight:600;">{_status}</span>
 </div>""", unsafe_allow_html=True)
 
+        _run = admin.pipeline_status()
+        if _run.get("started"):
+            st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+            with st.container(border=True):
+                st.markdown(
+                    f"**Last dashboard run** — started {_run['started']} · "
+                    f"{'⏳ running' if _run['running'] else 'finished'}  \n"
+                    f"`{_run.get('cmd','')}`")
+                if _run.get("log_tail"):
+                    st.code(_run["log_tail"], language="text")
+                if st.button("Refresh", key="refresh_run"):
+                    st.cache_data.clear()
+                    st.rerun()
+
     with p2:
         with st.container(border=True):
             st.markdown(f"""
@@ -3772,39 +3886,51 @@ background:{_col}18;color:{_col};font-weight:600;">{_status}</span>
 text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
 Manual Pipeline Run</div>
   <div style="font-size:14px;color:{s.FG};line-height:1.6;">
-Trigger a full pipeline run immediately, outside the scheduled
-6-day satellite pass cycle. Use when a new scene is available
-or after a configuration change.
+Starts <code>run_pipeline.py</code> in the background. Leave the scene
+empty to check Copernicus for new scenes, or give the path of a local
+scene file (a raw <code>.zip</code> or a preprocessed <code>_db.tif</code>).
   </div>
 </div>""", unsafe_allow_html=True)
-            _scene = st.text_input("Scene ID (optional)",
-                placeholder="S1A_IW_GRDH_...", key="manual_scene")
-            _dry   = st.checkbox("Dry run — process but do not dispatch alerts",
-                key="dry_run")
+            _scene = st.text_input("Scene file (optional)",
+                                   placeholder="data/raw/S1A_IW_GRDH_....zip", key="manual_scene")
+            _dry = st.checkbox("Don't send alerts (messages are built and logged only)",
+                               key="dry_run")
             st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-            if st.button("Run pipeline now", key="run_pipeline",
-                         type="primary", use_container_width=True):
-                with st.spinner("Initiating pipeline…"):
-                    import time; time.sleep(1.5)
-                st.success("Pipeline run queued. "
-                           "Check Audit Log for progress updates.")
+            if st.button("Run pipeline now", key="run_pipeline", type="primary",
+                         use_container_width=True):
+                try:
+                    _state = admin.launch_pipeline(_scene, _dry, user=_me)
+                    st.success(f"Pipeline started (PID {_state['pid']}). "
+                               f"Progress is shown on the left; results appear when it finishes.")
+                except (RuntimeError, FileNotFoundError) as e:
+                    st.error(str(e))
 
         st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-
         with st.container(border=True):
             st.markdown(f"""
 <div style="padding:4px 0 12px;">
   <div style="font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED};
 text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
 Calibration</div>
+  <div style="font-size:13px;color:{s.MUTED};">Saved to config/runtime_settings.json;
+  applied from the next run.</div>
 </div>""", unsafe_allow_html=True)
-            _iou_t = st.slider("IoU threshold override",
-                0.50, 0.95, 0.65, 0.05, key="cal_iou")
-            _area_t = st.slider("Minimum area (ha)",
-                50, 1000, 200, 50, key="cal_area")
-            if st.button("Apply calibration", key="apply_cal",
-                         use_container_width=True):
-                st.success("Calibration applied to next run.")
+            _cur = admin.get_settings()
+            _relax = st.slider("Threshold relaxation factor (<1 = detect more water)",
+                               0.80, 1.20, float(_cur["otsu_relaxation_factor"]), 0.01, key="cal_relax")
+            _tpi = st.slider("TPI high-ground cut-off (m)", 0.1, 5.0,
+                             float(_cur["tpi_threshold"]), 0.1, key="cal_tpi")
+            _cd = st.slider("Change-detection drop (dB)", 0.5, 6.0,
+                            float(_cur["change_detection_threshold"]), 0.5, key="cal_cd")
+            _area_t = st.slider("Minimum area before alerting (ha)", 0, 1000,
+                                int(_cur["min_flood_area_ha"]), 10, key="cal_area")
+            if st.button("Apply calibration", key="apply_cal", use_container_width=True):
+                admin.save_settings(otsu_relaxation_factor=_relax, tpi_threshold=_tpi,
+                                    change_detection_threshold=_cd, min_flood_area_ha=_area_t)
+                admin.record(_me, "CALIBRATION_CHANGE",
+                             f"relax={_relax}, tpi={_tpi} m, change={_cd} dB, min area={_area_t} ha",
+                             "info")
+                st.success("Calibration saved — used from the next run.")
 
 # ══════════════════════════════════════════════════════════
 # TAB 4 — AUDIT LOG
@@ -3814,28 +3940,10 @@ Calibration</div>
 def _render_admin_audit():
     st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
 
-    _log = [
-        ("2025-10-23 14:47","admin@suddwatch.org","ALERT_SENT",
-         "SMS + email dispatched for EVT-2025-047","success"),
-        ("2025-10-23 14:45","admin@suddwatch.org","PIPELINE_COMPLETE",
-         "EVT-2025-047 processed in 43 min · IoU 0.71","success"),
-        ("2025-10-23 14:02","admin@suddwatch.org","PIPELINE_START",
-         "Manual run triggered · Scene S1A_IW_GRDH_20251023","info"),
-        ("2025-10-22 09:15","coord@ocha.org","EXPORT",
-         "GeoJSON export · EVT-2025-041 · 2.4 MB","info"),
-        ("2025-10-21 16:33","admin@suddwatch.org","USER_APPROVED",
-         "Access approved for j.okello@iom.int","success"),
-        ("2025-10-20 11:02","analyst@reach.org","LOGIN",
-         "Signed in from 41.210.x.x","info"),
-        ("2025-10-19 08:44","admin@suddwatch.org","THRESHOLD_CHANGE",
-         "IoU threshold: 0.60 → 0.65","warning"),
-        ("2025-10-18 15:21","admin@suddwatch.org","ALERT_SENT",
-         "SMS + email dispatched for EVT-2025-041","success"),
-        ("2025-10-17 10:05","coord@ocha.org","EXPORT",
-         "PDF Report · EVT-2025-033 · 4.1 MB","info"),
-        ("2025-10-16 09:30","admin@suddwatch.org","LOGIN",
-         "Signed in from 41.210.x.x","info"),
-    ]
+    _log = admin.audit_log()
+    if not _log:
+        st.info("No events recorded yet — pipeline runs, alerts and dashboard "
+                "actions will appear here.")
     _type_col = {"success":s.SUCCESS,"info":s.ACCENT,
                  "warning":s.WARNING,"error":s.DANGER}
     _type_icon= {"success":"✓","info":"·","warning":"⚠","error":"✗"}
@@ -3907,12 +4015,8 @@ Connectivity status of all third-party APIs and data sources.
   </div>
 </div>""", unsafe_allow_html=True)
             _services = [
-                ("Copernicus Data Space",  "Connected",     s.SUCCESS, "Last check: 2 min ago"),
-                ("Twilio SMS",             "Connected",     s.SUCCESS, "Balance: $18.40"),
-                ("Gmail SMTP",             "Degraded",      s.WARNING, "Timeout on last test"),
-                ("ReliefWeb API",          "Connected",     s.SUCCESS, "Last fetch: 22 min ago"),
-                ("WorldPop API",           "Connected",     s.SUCCESS, "Cache valid"),
-                ("OpenStreetMap Tiles",    "Connected",     s.SUCCESS, "Response: 142 ms"),
+                (_n, _st, s.SUCCESS if _st == "Configured" else s.DANGER, _note)
+                for _n, _st, _note in admin.service_readiness()
             ]
             for _svc, _stat, _col, _note in _services:
                 st.markdown(f"""
@@ -3937,12 +4041,7 @@ background:{_col}18;color:{_col};font-weight:600;">{_stat}</span>
 text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
 Storage & Database</div>
 </div>""", unsafe_allow_html=True)
-            _storage = [
-                ("SQLite database",   "12.4 MB",  68),
-                ("Satellite cache",   "3.2 GB",   42),
-                ("Export archive",    "1.8 GB",   24),
-                ("Log files",         "284 MB",   15),
-            ]
+            _storage = admin.storage()
             for _name, _size, _pct in _storage:
                 st.markdown(f"""
 <div style="padding:10px 0;border-bottom:1px solid {s.BORDER};">
@@ -3964,14 +4063,18 @@ Storage & Database</div>
 <div style="padding:4px 0 12px;">
   <div style="font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED};
 text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
-Season Management</div>
+Maintenance</div>
 </div>""", unsafe_allow_html=True)
-            _season = st.selectbox("Active season",
-                ["2025 Flood Season","2024 Flood Season"],
-                key="active_season")
-            if st.button("Set active season", key="set_season",
+            if st.button("Test Twilio + SMTP login", key="conn_test",
                          use_container_width=True):
-                st.success(f"{_season} set as active.")
+                with st.spinner("Connecting…"):
+                    _ct = admin.connectivity_test()
+                (st.success if _ct["twilio"] else st.error)(
+                    f"Twilio: {'OK' if _ct['twilio'] else 'failed'}")
+                (st.success if _ct["smtp"] else st.error)(
+                    f"Gmail SMTP: {'OK' if _ct['smtp'] else 'failed'}")
+                for _err in _ct["errors"]:
+                    st.caption(_err)
             st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
             if st.button("Clear all caches", key="clear_cache",
                          use_container_width=True):
@@ -4126,13 +4229,10 @@ section[data-testid="stMain"] > div {{min-height:100vh;}}
                     _submit = st.form_submit_button("Sign in",
                                 use_container_width=True)
                 if _submit:
-                    _u = DEMO_USERS.get(_email.strip().lower())
-                    if _u and _u["password"] == _pass:
-                        st.session_state["sw_auth"] = {
-                            "email": _email.strip().lower(),
-                            "name":  _u["name"],
-                            "role":  _u["role"],
-                        }
+                    _u = auth.authenticate(_email, _pass)
+                    if _u:
+                        st.session_state["sw_auth"] = _u
+                        admin.record(_u["email"], "LOGIN", "Signed in", "info")
                         # Admin lands on History, User lands on Home
                         st.session_state["page"] = "History" if _u["role"] == "Admin" else "Home"
                         st.session_state.pop("sw_page", None)
@@ -4177,10 +4277,20 @@ section[data-testid="stMain"] > div {{min-height:100vh;}}
                             st.error("Passwords do not match.")
                         elif "@" not in _ru_email:
                             st.error("Enter a valid email address.")
+                        elif len(_ru_pw) < 8:
+                            st.error("Password must be at least 8 characters.")
                         else:
-                            st.success(
-                                f"Request submitted for {_ru_name} ({_ru_org}). "
-                                "An admin will activate your account within 24 hrs.")
+                            _res = auth.submit_request(_ru_name, _ru_org, _ru_email, _ru_pw)
+                            if _res == "exists":
+                                st.error("An account with this email already exists.")
+                            elif _res == "pending":
+                                st.info("A request for this email is already pending.")
+                            else:
+                                admin.record(_ru_email, "ACCESS_REQUEST",
+                                             f"{_ru_name} ({_ru_org})", "info")
+                                st.success(
+                                    f"Request submitted for {_ru_name} ({_ru_org}). "
+                                    "An administrator will review it.")
 
             st.markdown("</div></div>", unsafe_allow_html=True)
             st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
@@ -4392,6 +4502,15 @@ render_breadcrumb({
     "Export":      "Export — Data & Reports",
 }.get(st.session_state.page, ""))
 
+if _cached_data_mode() == "demo":
+    st.markdown(
+        f"<div style='background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.45);"
+        f"border-radius:6px;padding:8px 14px;margin-bottom:12px;font-size:13px;color:{s.FG};'>"
+        f"<b style='color:#f59e0b;'>DEMO DATA</b> — the pipeline has not produced a completed "
+        f"event yet, so example data is shown. Run <code>python run_pipeline.py</code> "
+        f"(or Admin → Pipeline) and real results replace it automatically.</div>",
+        unsafe_allow_html=True)
+
 page = st.session_state.page
 if   page == "Home":           page_home()
 elif page == "History":
@@ -4405,482 +4524,4 @@ elif page == "Alert Config":   page_admin_alerts()
 elif page == "Pipeline":       page_admin_pipeline()
 elif page == "Audit Log":      page_admin_audit()
 elif page == "System Health":  page_admin_health()
-elif page == "Admin":
-    _sw_user = st.session_state.get("sw_auth", {})
-    if _sw_user.get("role") != "Admin":
-        st.error("Access denied — Admin role required.")
-        st.stop()
-
-    # ── Admin header ──────────────────────────────────────────
-    st.markdown(f"""
-<div style="margin-bottom:24px;">
-  <h2 style="font-family:'Barlow Condensed',sans-serif;font-size:28px;
-    font-weight:700;color:{s.FG};margin:0 0 6px;">Admin Panel</h2>
-  <p style="font-size:14px;color:{s.MUTED};margin:0;">
-    System administration for SuddWatch. Restricted to Admin role.
-  </p>
-</div>""", unsafe_allow_html=True)
-
-    tab_users, tab_alerts, tab_pipeline, tab_audit, tab_health = st.tabs([
-        "User Management", "Alert Config", "Pipeline Controls",
-        "Audit Log", "System Health"
-    ])
-
-    from datetime import datetime as _dt
-
-    # ══════════════════════════════════════════════════════════
-    # TAB 1 — USER MANAGEMENT
-    # ══════════════════════════════════════════════════════════
-    with tab_users:
-        st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
-
-        # Summary KPIs
-        k1, k2, k3 = st.columns(3)
-        for col, label, val, color in [
-            (k1, "Active Accounts",    str(len(DEMO_USERS)), s.SUCCESS),
-            (k2, "Pending Requests",   "2",                  s.WARNING),
-            (k3, "Admin Accounts",     "1",                  s.ACCENT),
-        ]:
-            with col:
-                st.markdown(f"""
-<div style="background:{s.CARD};border:1px solid {s.BORDER};
-  border-left:3px solid {color};border-radius:8px;padding:16px 20px;">
-  <div style="font-family:'DM Mono',monospace;font-size:10px;
-    color:{s.MUTED};text-transform:uppercase;letter-spacing:.06em;
-    margin-bottom:6px;">{label}</div>
-  <div style="font-family:'Barlow Condensed',sans-serif;font-size:32px;
-    font-weight:700;color:{color};">{val}</div>
-</div>""", unsafe_allow_html=True)
-
-        st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
-
-        # Active accounts
-        with st.container(border=True):
-            st.markdown(f"""
-<div style="padding:4px 0 16px;">
-  <div style="font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED};
-    text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
-    Active Accounts</div>
-  <div style="font-size:14px;color:{s.FG};">
-    All currently active user accounts with their role and access level.
-  </div>
-</div>""", unsafe_allow_html=True)
-
-            for _em, _ud in DEMO_USERS.items():
-                _rc    = s.ACCENT if _ud["role"] == "Admin" else s.SUCCESS
-                _init  = _ud["name"][0].upper()
-                st.markdown(f"""
-<div style="display:flex;align-items:center;gap:14px;padding:12px 0;
-  border-bottom:1px solid {s.BORDER};">
-  <div style="width:36px;height:36px;border-radius:50%;
-    background:{_rc}20;display:flex;align-items:center;
-    justify-content:center;font-size:14px;font-weight:600;
-    color:{_rc};flex-shrink:0;">{_init}</div>
-  <div style="flex:1;">
-    <div style="font-size:14px;font-weight:500;color:{s.FG};
-      margin-bottom:2px;">{_ud['name']}</div>
-    <div style="font-family:'DM Mono',monospace;font-size:12px;
-      color:{s.MUTED};">{_em}</div>
-  </div>
-  <div style="display:flex;align-items:center;gap:8px;">
-    <span style="font-size:11px;padding:3px 10px;border-radius:12px;
-      background:{_rc}18;color:{_rc};font-weight:600;">
-      {_ud['role']}</span>
-    <span style="font-size:11px;padding:3px 10px;border-radius:12px;
-      background:{s.SUCCESS}18;color:{s.SUCCESS};font-weight:600;">
-      Active</span>
-  </div>
-</div>""", unsafe_allow_html=True)
-
-        st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
-
-        # Pending access requests
-        with st.container(border=True):
-            st.markdown(f"""
-<div style="padding:4px 0 16px;">
-  <div style="font-family:'DM Mono',monospace;font-size:11px;color:{s.WARNING};
-    text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
-    Pending Access Requests</div>
-  <div style="font-size:14px;color:{s.FG};">
-    Users who submitted a request through the Sign Up form. Approve to
-    activate their account or reject to decline.
-  </div>
-</div>""", unsafe_allow_html=True)
-
-            _requests = [
-                {"name":"Dr. Amara Nyang","org":"UNICEF South Sudan",
-                 "email":"a.nyang@unicef.org","submitted":"2025-10-21","role":"User"},
-                {"name":"James Okello","org":"IOM Juba",
-                 "email":"j.okello@iom.int","submitted":"2025-10-22","role":"User"},
-            ]
-            for _r in _requests:
-                _rc1, _rc2, _rc3 = st.columns([4,1,1])
-                with _rc1:
-                    st.markdown(f"""
-<div style="padding:10px 0;">
-  <div style="font-size:14px;font-weight:500;color:{s.FG};margin-bottom:2px;">
-    {_r['name']} &nbsp;
-    <span style="font-size:12px;font-weight:400;color:{s.MUTED};">
-      {_r['org']}</span></div>
-  <div style="font-family:'DM Mono',monospace;font-size:12px;color:{s.MUTED};">
-    {_r['email']} &middot; Submitted {_r['submitted']}</div>
-</div>""", unsafe_allow_html=True)
-                with _rc2:
-                    if st.button("Approve", key=f"approve_{_r['email']}",
-                                 type="primary", use_container_width=True):
-                        st.success(f"Approved {_r['name']}")
-                with _rc3:
-                    if st.button("Reject", key=f"reject_{_r['email']}",
-                                 use_container_width=True):
-                        st.warning(f"Rejected {_r['name']}")
-                st.markdown(f"<div style='height:1px;background:{s.BORDER};'></div>",
-                            unsafe_allow_html=True)
-
-    # ══════════════════════════════════════════════════════════
-    # TAB 2 — ALERT CONFIGURATION
-    # ══════════════════════════════════════════════════════════
-    with tab_alerts:
-        st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
-
-        a1, a2 = st.columns(2, gap="large")
-
-        with a1:
-            with st.container(border=True):
-                st.markdown(f"""
-<div style="padding:4px 0 16px;">
-  <div style="font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED};
-    text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
-    SMS Recipients</div>
-  <div style="font-size:14px;color:{s.FG};">
-    Phone numbers receiving SMS alerts. One per line, in E.164 format
-    (+211XXXXXXXXX).
-  </div>
-</div>""", unsafe_allow_html=True)
-                _sms = st.text_area("SMS", height=140, key="admin_sms",
-                    label_visibility="collapsed",
-                    value="+211921000001 - Chief Maker Deng\n"
-                          "+211921000002 - Chief Nyakuoth Riek\n"
-                          "+211921000003 - Chief Peter Thon")
-                if st.button("Save SMS list", key="save_sms", use_container_width=True):
-                    st.success("SMS recipient list saved.")
-
-            st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-
-            with st.container(border=True):
-                st.markdown(f"""
-<div style="padding:4px 0 16px;">
-  <div style="font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED};
-    text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
-    Email Recipients</div>
-  <div style="font-size:14px;color:{s.FG};">
-    Email addresses for full HTML situation reports.
-  </div>
-</div>""", unsafe_allow_html=True)
-                _email_list = st.text_area("Email", height=120, key="admin_email",
-                    label_visibility="collapsed",
-                    value="ocha.ssd@un.org\nreach.ssd@reach-initiative.org\nmsf.juba@msf.org")
-                if st.button("Save email list", key="save_email", use_container_width=True):
-                    st.success("Email recipient list saved.")
-
-        with a2:
-            with st.container(border=True):
-                st.markdown(f"""
-<div style="padding:4px 0 16px;">
-  <div style="font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED};
-    text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
-    Alert Thresholds</div>
-  <div style="font-size:14px;color:{s.FG};">
-    Alerts are only dispatched when detections meet these minimum thresholds.
-    Adjust to reduce false positives.
-  </div>
-</div>""", unsafe_allow_html=True)
-                _min_ha  = st.slider("Minimum flood extent (ha)",
-                    100, 2000, 500, 50, key="thresh_ha")
-                _min_pop = st.slider("Minimum people at risk",
-                    100, 10000, 1000, 100, key="thresh_pop")
-                _min_iou = st.slider("Minimum IoU score",
-                    0.50, 0.95, 0.65, 0.05, key="thresh_iou")
-                st.markdown(f"""
-<div style="background:{s.MUTED_BG};border-radius:6px;padding:12px 14px;
-  margin-top:8px;font-size:13px;color:{s.MUTED};line-height:1.6;">
-  Alert fires when: extent ≥ <b style="color:{s.FG};">{_min_ha} ha</b>
-  AND population ≥ <b style="color:{s.FG};">{_min_pop:,}</b>
-  AND IoU ≥ <b style="color:{s.FG};">{_min_iou:.2f}</b>
-</div>""", unsafe_allow_html=True)
-                st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-                if st.button("Save thresholds", key="save_thresh",
-                             type="primary", use_container_width=True):
-                    st.success("Thresholds saved.")
-
-            st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-
-            with st.container(border=True):
-                st.markdown(f"""
-<div style="padding:4px 0 12px;">
-  <div style="font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED};
-    text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
-    Test Alert</div>
-  <div style="font-size:14px;color:{s.FG};">
-    Send a test SMS and email to all recipients without triggering a
-    real detection event.
-  </div>
-</div>""", unsafe_allow_html=True)
-                if st.button("Send test alert", key="test_alert",
-                             use_container_width=True):
-                    with st.spinner("Sending…"):
-                        import time; time.sleep(1)
-                    st.success("Test alert sent to all recipients.")
-
-    # ══════════════════════════════════════════════════════════
-    # TAB 3 — PIPELINE CONTROLS
-    # ══════════════════════════════════════════════════════════
-    with tab_pipeline:
-        st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
-
-        p1, p2 = st.columns([3, 2], gap="large")
-
-        with p1:
-            with st.container(border=True):
-                st.markdown(f"""
-<div style="padding:4px 0 16px;">
-  <div style="font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED};
-    text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
-    Pipeline Stage Status</div>
-  <div style="font-size:14px;color:{s.FG};">
-    Current health of each automated processing stage. Green = operational,
-    amber = degraded, red = failed.
-  </div>
-</div>""", unsafe_allow_html=True)
-
-                _stages = [
-                    ("Data Acquisition",     "Operational", s.SUCCESS,  "Last: 2025-10-23 08:12 UTC"),
-                    ("Preprocessing (SNAP)", "Operational", s.SUCCESS,  "Avg: 916 s"),
-                    ("Flood Detection",      "Operational", s.SUCCESS,  "Last IoU: 0.71"),
-                    ("Risk Assessment",      "Operational", s.SUCCESS,  "WorldPop + OSM"),
-                    ("Alert Dispatch (SMS)", "Operational", s.SUCCESS,  "Twilio · 3 recipients"),
-                    ("Alert Dispatch (Email)","Degraded",   s.WARNING,  "SMTP timeout — retrying"),
-                ]
-                for _name, _status, _col, _detail in _stages:
-                    st.markdown(f"""
-<div style="display:flex;align-items:center;gap:12px;padding:11px 0;
-  border-bottom:1px solid {s.BORDER};">
-  <div style="width:8px;height:8px;border-radius:50%;
-    background:{_col};flex-shrink:0;"></div>
-  <div style="flex:1;">
-    <div style="font-size:14px;font-weight:500;color:{s.FG};">{_name}</div>
-    <div style="font-size:12px;color:{s.MUTED};font-family:'DM Mono',monospace;
-      margin-top:2px;">{_detail}</div>
-  </div>
-  <span style="font-size:11px;padding:3px 10px;border-radius:12px;
-    background:{_col}18;color:{_col};font-weight:600;">{_status}</span>
-</div>""", unsafe_allow_html=True)
-
-        with p2:
-            with st.container(border=True):
-                st.markdown(f"""
-<div style="padding:4px 0 16px;">
-  <div style="font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED};
-    text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
-    Manual Pipeline Run</div>
-  <div style="font-size:14px;color:{s.FG};line-height:1.6;">
-    Trigger a full pipeline run immediately, outside the scheduled
-    6-day satellite pass cycle. Use when a new scene is available
-    or after a configuration change.
-  </div>
-</div>""", unsafe_allow_html=True)
-                _scene = st.text_input("Scene ID (optional)",
-                    placeholder="S1A_IW_GRDH_...", key="manual_scene")
-                _dry   = st.checkbox("Dry run — process but do not dispatch alerts",
-                    key="dry_run")
-                st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-                if st.button("Run pipeline now", key="run_pipeline",
-                             type="primary", use_container_width=True):
-                    with st.spinner("Initiating pipeline…"):
-                        import time; time.sleep(1.5)
-                    st.success("Pipeline run queued. "
-                               "Check Audit Log for progress updates.")
-
-            st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-
-            with st.container(border=True):
-                st.markdown(f"""
-<div style="padding:4px 0 12px;">
-  <div style="font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED};
-    text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
-    Calibration</div>
-</div>""", unsafe_allow_html=True)
-                _iou_t = st.slider("IoU threshold override",
-                    0.50, 0.95, 0.65, 0.05, key="cal_iou")
-                _area_t = st.slider("Minimum area (ha)",
-                    50, 1000, 200, 50, key="cal_area")
-                if st.button("Apply calibration", key="apply_cal",
-                             use_container_width=True):
-                    st.success("Calibration applied to next run.")
-
-    # ══════════════════════════════════════════════════════════
-    # TAB 4 — AUDIT LOG
-    # ══════════════════════════════════════════════════════════
-    with tab_audit:
-        st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
-
-        _log = [
-            ("2025-10-23 14:47","admin@suddwatch.org","ALERT_SENT",
-             "SMS + email dispatched for EVT-2025-047","success"),
-            ("2025-10-23 14:45","admin@suddwatch.org","PIPELINE_COMPLETE",
-             "EVT-2025-047 processed in 43 min · IoU 0.71","success"),
-            ("2025-10-23 14:02","admin@suddwatch.org","PIPELINE_START",
-             "Manual run triggered · Scene S1A_IW_GRDH_20251023","info"),
-            ("2025-10-22 09:15","coord@ocha.org","EXPORT",
-             "GeoJSON export · EVT-2025-041 · 2.4 MB","info"),
-            ("2025-10-21 16:33","admin@suddwatch.org","USER_APPROVED",
-             "Access approved for j.okello@iom.int","success"),
-            ("2025-10-20 11:02","analyst@reach.org","LOGIN",
-             "Signed in from 41.210.x.x","info"),
-            ("2025-10-19 08:44","admin@suddwatch.org","THRESHOLD_CHANGE",
-             "IoU threshold: 0.60 → 0.65","warning"),
-            ("2025-10-18 15:21","admin@suddwatch.org","ALERT_SENT",
-             "SMS + email dispatched for EVT-2025-041","success"),
-            ("2025-10-17 10:05","coord@ocha.org","EXPORT",
-             "PDF Report · EVT-2025-033 · 4.1 MB","info"),
-            ("2025-10-16 09:30","admin@suddwatch.org","LOGIN",
-             "Signed in from 41.210.x.x","info"),
-        ]
-        _type_col = {"success":s.SUCCESS,"info":s.ACCENT,
-                     "warning":s.WARNING,"error":s.DANGER}
-        _type_icon= {"success":"✓","info":"·","warning":"⚠","error":"✗"}
-
-        with st.container(border=True):
-            st.markdown(f"""
-<div style="padding:4px 0 16px;">
-  <div style="font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED};
-    text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
-    System Audit Log</div>
-  <div style="font-size:14px;color:{s.FG};">
-    Chronological record of all significant system events — pipeline runs,
-    alert dispatches, user actions and configuration changes.
-  </div>
-</div>""", unsafe_allow_html=True)
-
-            for _ts, _user, _action, _detail, _type in _log:
-                _c = _type_col.get(_type, s.MUTED)
-                _i = _type_icon.get(_type, "·")
-                st.markdown(f"""
-<div style="display:flex;gap:14px;padding:10px 0;
-  border-bottom:1px solid {s.BORDER};align-items:flex-start;">
-  <div style="font-family:'DM Mono',monospace;font-size:11px;
-    color:{s.MUTED};white-space:nowrap;padding-top:2px;min-width:140px;">
-    {_ts}</div>
-  <div style="width:20px;height:20px;border-radius:50%;
-    background:{_c}18;display:flex;align-items:center;
-    justify-content:center;font-size:11px;color:{_c};
-    flex-shrink:0;font-weight:700;">{_i}</div>
-  <div style="flex:1;">
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:3px;">
-      <span style="font-size:12px;font-weight:600;color:{_c};">{_action}</span>
-      <span style="font-size:11px;color:{s.MUTED};">· {_user}</span>
-    </div>
-    <div style="font-size:13px;color:{s.FG};">{_detail}</div>
-  </div>
-</div>""", unsafe_allow_html=True)
-
-        st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-        import io, csv
-        _buf = io.StringIO()
-        _w   = csv.writer(_buf)
-        _w.writerow(["timestamp","user","action","detail","type"])
-        for row in _log:
-            _w.writerow(row)
-        st.download_button("⬇ Export audit log (CSV)", data=_buf.getvalue(),
-            file_name="suddwatch_audit.csv", mime="text/csv",
-            key="audit_csv")
-
-    # ══════════════════════════════════════════════════════════
-    # TAB 5 — SYSTEM HEALTH
-    # ══════════════════════════════════════════════════════════
-    with tab_health:
-        st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
-
-        h1, h2 = st.columns(2, gap="large")
-
-        with h1:
-            with st.container(border=True):
-                st.markdown(f"""
-<div style="padding:4px 0 16px;">
-  <div style="font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED};
-    text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
-    External Services</div>
-  <div style="font-size:14px;color:{s.FG};">
-    Connectivity status of all third-party APIs and data sources.
-  </div>
-</div>""", unsafe_allow_html=True)
-                _services = [
-                    ("Copernicus Data Space",  "Connected",     s.SUCCESS, "Last check: 2 min ago"),
-                    ("Twilio SMS",             "Connected",     s.SUCCESS, "Balance: $18.40"),
-                    ("Gmail SMTP",             "Degraded",      s.WARNING, "Timeout on last test"),
-                    ("ReliefWeb API",          "Connected",     s.SUCCESS, "Last fetch: 22 min ago"),
-                    ("WorldPop API",           "Connected",     s.SUCCESS, "Cache valid"),
-                    ("OpenStreetMap Tiles",    "Connected",     s.SUCCESS, "Response: 142 ms"),
-                ]
-                for _svc, _stat, _col, _note in _services:
-                    st.markdown(f"""
-<div style="display:flex;align-items:center;gap:12px;padding:10px 0;
-  border-bottom:1px solid {s.BORDER};">
-  <div style="width:8px;height:8px;border-radius:50%;
-    background:{_col};flex-shrink:0;"></div>
-  <div style="flex:1;">
-    <div style="font-size:14px;font-weight:500;color:{s.FG};">{_svc}</div>
-    <div style="font-size:11px;color:{s.MUTED};font-family:'DM Mono',monospace;
-      margin-top:1px;">{_note}</div>
-  </div>
-  <span style="font-size:11px;padding:3px 10px;border-radius:12px;
-    background:{_col}18;color:{_col};font-weight:600;">{_stat}</span>
-</div>""", unsafe_allow_html=True)
-
-        with h2:
-            with st.container(border=True):
-                st.markdown(f"""
-<div style="padding:4px 0 16px;">
-  <div style="font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED};
-    text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
-    Storage & Database</div>
-</div>""", unsafe_allow_html=True)
-                _storage = [
-                    ("SQLite database",   "12.4 MB",  68),
-                    ("Satellite cache",   "3.2 GB",   42),
-                    ("Export archive",    "1.8 GB",   24),
-                    ("Log files",         "284 MB",   15),
-                ]
-                for _name, _size, _pct in _storage:
-                    st.markdown(f"""
-<div style="padding:10px 0;border-bottom:1px solid {s.BORDER};">
-  <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
-    <span style="font-size:13px;font-weight:500;color:{s.FG};">{_name}</span>
-    <span style="font-size:12px;color:{s.MUTED};
-      font-family:'DM Mono',monospace;">{_size}</span>
-  </div>
-  <div style="background:{s.BORDER};border-radius:3px;height:4px;">
-    <div style="background:{s.ACCENT};width:{_pct}%;
-      height:4px;border-radius:3px;"></div>
-  </div>
-</div>""", unsafe_allow_html=True)
-
-            st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-
-            with st.container(border=True):
-                st.markdown(f"""
-<div style="padding:4px 0 12px;">
-  <div style="font-family:'DM Mono',monospace;font-size:11px;color:{s.MUTED};
-    text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
-    Season Management</div>
-</div>""", unsafe_allow_html=True)
-                _season = st.selectbox("Active season",
-                    ["2025 Flood Season","2024 Flood Season"],
-                    key="active_season")
-                if st.button("Set active season", key="set_season",
-                             use_container_width=True):
-                    st.success(f"{_season} set as active.")
-                st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-                if st.button("Clear all caches", key="clear_cache",
-                             use_container_width=True):
-                    st.cache_data.clear()
-                    st.success("All caches cleared.")
+elif page == "Admin":         page_admin_users()   # legacy link

@@ -238,6 +238,22 @@ class DatabaseManager:
             # status: 'running', 'completed', 'failed'
             logger.debug("Table 'processing_logs' ready.")
 
+            # Columns added after the first release. ALTER TABLE keeps
+            # existing databases working without losing data.
+            self._add_missing_columns(cursor, "events", {
+                "affected_population": "INTEGER",
+                "processing_seconds": "REAL",
+                "risk_summary_path": "TEXT",
+                "event_label": "TEXT",
+            })
+            self._add_missing_columns(cursor, "affected_populations", {
+                "risk_level": "TEXT",
+                "recommended_action": "TEXT",
+            })
+            self._add_missing_columns(cursor, "infrastructure_impacts", {
+                "flooded_length_km": "REAL",
+            })
+
             # Commit all table creation statements
             conn.commit()
             logger.info("All 6 database tables initialised successfully.")
@@ -248,6 +264,23 @@ class DatabaseManager:
         finally:
             # Always close connection — even if an error occurred
             conn.close()
+
+    @staticmethod
+    def _add_missing_columns(cursor, table: str, columns: dict) -> None:
+        """Add any of `columns` ({name: type}) that `table` does not have yet."""
+        existing = {row[1] for row in cursor.execute(f"PRAGMA table_info({table})")}
+        for name, col_type in columns.items():
+            if name not in existing:
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN {name} {col_type}")
+                logger.info(f"Database migrated: added {table}.{name}")
+
+    # Columns of `events` that update_event() is allowed to change
+    EVENT_UPDATABLE = (
+        "satellite_acquisition_time", "processing_start_time", "processing_end_time",
+        "total_latency_seconds", "scene_path", "status", "error_message",
+        "affected_population", "risk_summary_path", "event_label",
+        "processing_seconds",
+    )
 
     # ============================================================
     # INSERT METHODS
@@ -312,40 +345,48 @@ class DatabaseManager:
 
     def update_event(self, event_id: int, event_data: dict) -> None:
         """
-        Updates an existing event record with processing results.
+        Update an existing event. Only the keys present in `event_data`
+        (and listed in EVENT_UPDATABLE) are changed — other columns keep
+        their current values. Unknown keys are ignored with a debug log.
 
-        Called at end of pipeline to record completion time and latency.
-
-        Args:
-            event_id: ID of the event to update
-            event_data: dict with fields to update. Recognised keys:
-                        'processing_end_time', 'total_latency_seconds',
-                        'status', 'error_message'
+        Flood extent and IoU belong to the flood_masks table — use
+        insert_flood_mask() / update_flood_mask() for those.
         """
+        updates = {k: v for k, v in event_data.items() if k in self.EVENT_UPDATABLE}
+        ignored = set(event_data) - set(updates)
+        if ignored:
+            logger.debug(f"update_event ignored non-event keys: {sorted(ignored)}")
+        if not updates:
+            return
         try:
             conn = self._get_connection()
-            cursor = conn.cursor()
-
-            cursor.execute("""
-                UPDATE events SET
-                    processing_end_time    = ?,
-                    total_latency_seconds  = ?,
-                    status                 = ?,
-                    error_message          = ?
-                WHERE event_id = ?
-            """, (
-                event_data.get("processing_end_time"),
-                event_data.get("total_latency_seconds"),
-                event_data.get("status", "completed"),
-                event_data.get("error_message"),
-                event_id,
-            ))
-
+            assignments = ", ".join(f"{k} = ?" for k in updates)
+            conn.execute(
+                f"UPDATE events SET {assignments} WHERE event_id = ?",
+                (*updates.values(), event_id),
+            )
             conn.commit()
-            logger.info(f"Event updated: event_id={event_id}, status={event_data.get('status')}")
-
+            logger.info(f"Event updated: event_id={event_id}, fields={list(updates)}")
         except sqlite3.Error as e:
             logger.error(f"Failed to update event {event_id}: {e}")
+            raise
+        finally:
+            conn.close()
+
+    def update_flood_mask(self, event_id: int, mask_data: dict) -> None:
+        """Update flood_extent_ha / iou_score / geotiff_path for an event's mask."""
+        allowed = ("flood_extent_ha", "iou_score", "geotiff_path", "detection_method")
+        updates = {k: v for k, v in mask_data.items() if k in allowed}
+        if not updates:
+            return
+        try:
+            conn = self._get_connection()
+            assignments = ", ".join(f"{k} = ?" for k in updates)
+            conn.execute(f"UPDATE flood_masks SET {assignments} WHERE event_id = ?",
+                         (*updates.values(), event_id))
+            conn.commit()
+        except sqlite3.Error as e:
+            logger.error(f"Failed to update flood mask for event {event_id}: {e}")
             raise
         finally:
             conn.close()
@@ -423,8 +464,10 @@ class DatabaseManager:
                     estimated_population,
                     flood_risk_percentage,
                     latitude,
-                    longitude
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    longitude,
+                    risk_level,
+                    recommended_action
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 event_id,
                 village_data.get("village_name"),
@@ -434,6 +477,8 @@ class DatabaseManager:
                 village_data.get("flood_risk_percentage"),
                 village_data.get("latitude"),
                 village_data.get("longitude"),
+                village_data.get("risk_level"),
+                village_data.get("recommended_action"),
             ))
 
             conn.commit()
@@ -479,8 +524,9 @@ class DatabaseManager:
                     facility_type,
                     segment_length_km,
                     status,
-                    coordinates
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    coordinates,
+                    flooded_length_km
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 event_id,
                 impact_data.get("infrastructure_type"),
@@ -489,6 +535,7 @@ class DatabaseManager:
                 impact_data.get("segment_length_km"),
                 impact_data.get("status", "at_risk"),
                 coordinates,
+                impact_data.get("flooded_length_km"),
             ))
 
             conn.commit()
@@ -538,7 +585,7 @@ class DatabaseManager:
                 alert_data.get("delivery_status", "pending"),
                 alert_data.get("sent_timestamp"),
                 alert_data.get("error_reason"),
-                alert_data.get("message_preview", "")[:160],  # Truncate to SMS length
+                (alert_data.get("message_preview") or "")[:160],  # Truncate to SMS length
             ))
 
             conn.commit()
@@ -583,7 +630,7 @@ class DatabaseManager:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (
                 event_id,
-                log_data.get("stage_name"),
+                log_data.get("stage_name") or log_data.get("stage"),
                 log_data.get("start_time"),
                 log_data.get("end_time"),
                 log_data.get("duration_seconds"),
@@ -674,7 +721,7 @@ class DatabaseManager:
                     params.append(filters["state"])
 
             # Always return most recent first
-            query += " ORDER BY e.event_timestamp DESC"
+            query += " ORDER BY e.event_timestamp DESC, e.event_id DESC"
 
             df = pd.read_sql_query(query, conn, params=params)
             logger.info(f"Query returned {len(df)} events.")
@@ -724,8 +771,10 @@ class DatabaseManager:
             cursor.execute("""
                 SELECT
                     COUNT(*) as total,
-                    SUM(CASE WHEN delivery_status = 'sent' THEN 1 ELSE 0 END) as sent
+                    SUM(CASE WHEN delivery_status IN ('sent', 'delivered')
+                             THEN 1 ELSE 0 END) as sent
                 FROM alerts
+                WHERE delivery_status != 'skipped'
             """)
             alert_row = cursor.fetchone()
             total_alerts = alert_row["total"] or 0
@@ -775,7 +824,7 @@ class DatabaseManager:
                 FROM events e
                 LEFT JOIN flood_masks fm ON e.event_id = fm.event_id
                 WHERE e.status = 'completed'
-                ORDER BY e.event_timestamp DESC
+                ORDER BY e.event_timestamp DESC, e.event_id DESC
                 LIMIT 1
             """)
 
@@ -849,10 +898,14 @@ class DatabaseManager:
 # Usage: python3 src/database.py
 # ============================================================
 if __name__ == "__main__":
+    import tempfile
     from src.config import Config, setup_logging
     setup_logging()
 
     config = Config()
+    # Use a throw-away database so the self-test never adds fake
+    # events to the real data/database/suddwatch.db
+    config.db_path = Path(tempfile.mkdtemp()) / "selftest.db"
     db = DatabaseManager(config)
 
     print("\n" + "=" * 55)

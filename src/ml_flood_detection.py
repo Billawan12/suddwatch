@@ -111,7 +111,14 @@ class MLFloodDetector:
         """
         self.config      = config
         self.model       = None
-        self.model_path  = config.project_root / "data" / "models" / "random_forest.pkl"
+        # Model file: config.ml_model_path (models/random_forest.pkl).
+        # Older versions saved to data/models/ — use that copy if it's the
+        # only one present.
+        self.model_path  = Path(getattr(config, "ml_model_path",
+                                        config.project_root / "models" / "random_forest.pkl"))
+        legacy = Path(config.project_root) / "data" / "models" / "random_forest.pkl"
+        if not self.model_path.exists() and legacy.exists():
+            self.model_path = legacy
         self.model_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Probability threshold — lower = higher recall (catch more floods)
@@ -133,13 +140,16 @@ class MLFloodDetector:
             )
 
     # ── Feature extraction ────────────────────────────────────
-    def extract_features(self, data: np.ndarray) -> np.ndarray:
+    def extract_features(self, data: np.ndarray, scene_stats: Optional[tuple] = None) -> np.ndarray:
         """
         Extract 11 spectral and texture features from a SAR backscatter array.
 
         Args:
             data: 2D float32 array of VH backscatter values in dB.
                   NaN values are handled gracefully.
+            scene_stats: optional (median, std) of the WHOLE scene. Pass
+                  this when `data` is only a tile, so the z-score feature
+                  is the same as it would be for the full scene.
 
         Returns:
             Feature matrix of shape (H*W, N_FEATURES).
@@ -150,8 +160,11 @@ class MLFloodDetector:
         H, W = data.shape
 
         # Replace NaN with scene median for computation
-        scene_median = float(np.nanmedian(data))
-        scene_std    = float(np.nanstd(data))
+        if scene_stats is not None:
+            scene_median, scene_std = (float(v) for v in scene_stats)
+        else:
+            scene_median = float(np.nanmedian(data))
+            scene_std    = float(np.nanstd(data))
         data_filled  = np.where(np.isnan(data), scene_median, data)
 
         features = []
@@ -390,44 +403,49 @@ class MLFloodDetector:
 
         logger.info(f"ML flood detection: {Path(image_path).name}")
 
+        from src import raster_utils as ru
+
         with rasterio.open(image_path) as src:
             data    = src.read(1).astype(np.float32)
             profile = src.profile.copy()
-            pixel_area_m2 = abs(src.transform.a * src.transform.e)
+            if src.nodata is not None and np.isfinite(src.nodata):
+                data[data == src.nodata] = np.nan
 
         H, W = data.shape
-        valid_mask = ~np.isnan(data)
+        valid_mask = np.isfinite(data)
+        if not valid_mask.any():
+            raise ValueError(f"No valid pixels in image: {image_path}")
 
-        # Extract features
-        X = self.extract_features(data)
+        # Whole-scene statistics for the z-score feature (from a sample)
+        sample = data[valid_mask]
+        if sample.size > 1_000_000:
+            sample = np.random.default_rng(42).choice(sample, 1_000_000, replace=False)
+        stats = (float(np.median(sample)), float(np.std(sample)))
 
-        # Predict in chunks to handle large rasters
-        CHUNK_SIZE  = 500_000
-        n_pixels    = H * W
-        probs       = np.zeros(n_pixels, dtype=np.float32)
+        # Predict tile by tile (blocks of rows with a 7-pixel halo so the
+        # 15×15 window features are identical to a whole-scene pass). This
+        # keeps memory bounded on full 25,000 × 17,000-pixel scenes.
+        HALO, BLOCK = 7, 512
+        prob_map = np.zeros((H, W), dtype=np.float32)
+        for r0 in range(0, H, BLOCK):
+            r1 = min(r0 + BLOCK, H)
+            a0, a1 = max(r0 - HALO, 0), min(r1 + HALO, H)
+            X = self.extract_features(data[a0:a1], scene_stats=stats)
+            probs = self.model.predict_proba(X)[:, 1].reshape(a1 - a0, W)
+            prob_map[r0:r1] = probs[r0 - a0:r0 - a0 + (r1 - r0)]
 
-        for start in range(0, n_pixels, CHUNK_SIZE):
-            end          = min(start + CHUNK_SIZE, n_pixels)
-            chunk        = X[start:end]
-            chunk_probs  = self.model.predict_proba(chunk)[:, 1]
-            probs[start:end] = chunk_probs
-
-        prob_map = probs.reshape(H, W)
-
-        # Apply threshold
+        # Apply threshold; no-data pixels get the mask no-data value
         flood_mask = (prob_map >= self.threshold).astype(np.uint8)
+        flood_mask[~valid_mask] = 255
+        prob_map[~valid_mask] = np.nan
 
-        # Zero out NaN pixels
-        flood_mask[~valid_mask] = 0
-
-        # Calculate flood extent
-        flood_pixels   = flood_mask.sum()
-        flood_extent_ha = (flood_pixels * pixel_area_m2) / 10_000
+        flood_pixels = int((flood_mask == 1).sum())
+        flood_extent_ha = ru.mask_area_ha(flood_mask, profile["transform"], ru.grid_crs(profile))
 
         logger.info(
             f"ML prediction: {flood_pixels:,} flood pixels, "
             f"{flood_extent_ha:,.1f} ha, "
-            f"mean prob={prob_map[valid_mask].mean():.3f}"
+            f"mean prob={np.nanmean(prob_map):.3f}"
         )
 
         # Save flood mask GeoTIFF
@@ -449,7 +467,7 @@ class MLFloodDetector:
         import rasterio
 
         image_path = Path(image_path)
-        mask_dir   = image_path.parent / "flood_masks"
+        mask_dir   = Path(getattr(self.config, "masks_dir", image_path.parent / "flood_masks"))
         mask_dir.mkdir(parents=True, exist_ok=True)
         mask_path  = mask_dir / image_path.name.replace(
             ".tif", "_flood_mask.tif"

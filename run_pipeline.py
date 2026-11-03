@@ -3,18 +3,20 @@
 run_pipeline.py — SuddWatch Pipeline Entry Point
 =================================================
 Cron-safe entry point for the flood detection pipeline.
-Designed to be called every 12 hours by cron or launchd.
+Designed to be called every 12 hours by cron or launchd (see CRON_SETUP.md).
 
 Usage:
-    # Run manually
     cd ~/suddwatch && source venv/bin/activate
-    python run_pipeline.py
-
-    # Run with verbose logging
-    python run_pipeline.py --verbose
-
-    # Dry run (initialise only, no downloads)
-    python run_pipeline.py --dry-run
+    python run_pipeline.py                      # check Copernicus, process new scenes
+    python run_pipeline.py --verbose            # DEBUG logging
+    python run_pipeline.py --dry-run            # start up + test Twilio/SMTP only
+    python run_pipeline.py --scene FILE [FILE ...]
+                                                # process local scene(s): a raw
+                                                # Sentinel-1 .zip, or an already
+                                                # preprocessed *_db.tif
+    python run_pipeline.py --scene FILE --no-alerts
+                                                # full run, but alert messages are
+                                                # only built and logged, not sent
 
 Cron example (every 12 hours):
     0 */12 * * * /Users/billawan/suddwatch/venv/bin/python \
@@ -50,6 +52,17 @@ def parse_args():
         "--dry-run",
         action="store_true",
         help="Initialise pipeline and check connectivity without processing scenes",
+    )
+    parser.add_argument(
+        "--scene",
+        nargs="+",
+        metavar="FILE",
+        help="Process these local scene files instead of querying Copernicus",
+    )
+    parser.add_argument(
+        "--no-alerts",
+        action="store_true",
+        help="Build alert messages and log them as 'skipped' without sending",
     )
     parser.add_argument(
         "--log-file",
@@ -130,7 +143,12 @@ def main():
             return 0
 
         # Run the full pipeline
-        results = pipeline.run()
+        if args.scene:
+            missing = [f for f in args.scene if not Path(f).exists()]
+            if missing:
+                logger.error(f"Scene file(s) not found: {missing}")
+                return 2
+        results = pipeline.run(scene_paths=args.scene, dry_run_alerts=args.no_alerts)
 
         # Log summary
         logger.info("Pipeline run summary:")

@@ -187,6 +187,12 @@ sudo systemctl status suddwatch-pipeline.timer
 
 ## Testing the Schedule
 
+### Process one local scene without sending alerts
+
+```bash
+python run_pipeline.py --scene data/raw/S1A_IW_GRDH_....zip --no-alerts
+```
+
 ### Dry run (no downloads, just connectivity check)
 
 ```bash
@@ -242,7 +248,9 @@ EOF
 | `No new scenes` | No new Sentinel-1 passes | Normal — check again in 6 days |
 | SMS not delivered | Twilio geo permissions | Enable Kenya in Twilio console |
 | Email timeout | Port 587 blocked | Confirmed using port 465 SSL |
-| Pipeline crashes | SNAP GPT not found | Verify `SNAP_GPT_PATH` in `.env` |
+| Raw scenes fail at preprocessing | SNAP GPT not found | Install SNAP, or set `SNAP_GPT_PATH` in `.env` |
+| Dashboard still shows "DEMO DATA" | No completed event with a flood mask yet | Run the pipeline once; also run `python scripts/clean_test_data.py --apply` to remove old test rows |
+| A downloaded scene was never processed | Run crashed after download (scene is in the registry) | Re-run it directly: `python run_pipeline.py --scene data/raw/<scene>.zip` |
 | DB locked | Concurrent pipeline runs | Only one instance should run at a time |
 
 ---
@@ -253,15 +261,15 @@ All credentials must be set in `.env` at the project root.
 See `.env.example` for the full list. Key variables:
 
 ```
-COPERNICUS_USERNAME=your_copernicus_username
+COPERNICUS_USER=your_copernicus_email
 COPERNICUS_PASSWORD=your_copernicus_password
 TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-TWILIO_PHONE_NUMBER=+12543472821
-SMTP_USER=Billawanguol@gmail.com
+TWILIO_PHONE_NUMBER=+1xxxxxxxxxx
+SMTP_USER=your_gmail@gmail.com
 SMTP_PASSWORD=your_gmail_app_password
-SMS_RECIPIENTS=+254705176665
-EMAIL_RECIPIENTS=Billawanguol@gmail.com
+SMS_RECIPIENTS=+211921000001,+211921000002
+EMAIL_RECIPIENTS=coord@ocha.org
 ```
 
 **Never commit `.env` to git.** It is already listed in `.gitignore`.

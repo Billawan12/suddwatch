@@ -35,11 +35,11 @@ from src.risk_assessment import RiskAssessor
 # ============================================================
 
 @pytest.fixture
-def config(tmp_path):
+def config(test_config, tmp_path):
     """
-    Provides a Config object with temporary paths for testing.
+    Provides an isolated Config object with temporary paths for testing.
     """
-    config = Config()
+    config = test_config
     # Override paths with temporary directories
     config.project_root = tmp_path
     config.worldpop_path = tmp_path / "worldpop" / "south_sudan_pop_2020_1km.tif"
@@ -647,7 +647,7 @@ class TestFullAssessment:
         with pytest.raises(FileNotFoundError):
             assessor.assess("/nonexistent/mask.tif")
 
-    def test_assess_returns_summary_dict(self, assessor, synthetic_flood_mask):
+    def test_assess_returns_summary_dict(self, assessor, synthetic_flood_mask, synthetic_worldpop_tif):
         """assess() should return a summary dictionary."""
         # Load data
         assessor.load_population_data()
@@ -661,7 +661,7 @@ class TestFullAssessment:
         assert 'affected_population_estimate' in result
         assert 'summary_statistics' in result
 
-    def test_assess_returns_summary_path(self, assessor, synthetic_flood_mask):
+    def test_assess_returns_summary_path(self, assessor, synthetic_flood_mask, synthetic_worldpop_tif):
         """assess() should return a path to the saved summary."""
         assessor.load_population_data()
 
@@ -670,7 +670,7 @@ class TestFullAssessment:
         assert Path(summary_path).exists()
         assert summary_path.endswith("_risk_summary.json")
 
-    def test_assess_handles_missing_osm_data(self, assessor, synthetic_flood_mask):
+    def test_assess_handles_missing_osm_data(self, assessor, synthetic_flood_mask, synthetic_worldpop_tif):
         """assess() should handle missing OSM data gracefully."""
         # Only load population data, not OSM
         assessor.load_population_data()
@@ -684,7 +684,7 @@ class TestFullAssessment:
         assert result['summary_statistics']['total_roads_inaccessible'] == 0
         assert result['summary_statistics']['total_health_facilities_at_risk'] == 0
 
-    def test_assess_has_all_summary_keys(self, assessor, synthetic_flood_mask):
+    def test_assess_has_all_summary_keys(self, assessor, synthetic_flood_mask, synthetic_worldpop_tif):
         """assess() summary should have all expected keys."""
         assessor.load_population_data()
 
@@ -704,6 +704,85 @@ class TestFullAssessment:
 
         for key in expected_keys:
             assert key in result, f"Missing key: {key}"
+
+
+# ============================================================
+# REGRESSION TESTS — bugs fixed in the November 2026 review
+# ============================================================
+
+class TestRegressionFixes:
+    """The original code used the mask's bounding box instead of flooded pixels."""
+
+    def test_dry_village_inside_scene_is_not_listed(self, assessor, synthetic_flood_mask):
+        import geopandas as gpd
+        from shapely.geometry import Point
+        # Inside the scene rectangle (30-31E, 7-8N) but far from the flooded centre
+        assessor._villages = gpd.GeoDataFrame(
+            {"name": ["Dry Corner"], "geometry": [Point(30.05, 7.95)]}, crs="EPSG:4326")
+        assert assessor._identify_affected_villages(*self._mask(synthetic_flood_mask)) == []
+
+    def test_flooded_village_gets_high_risk(self, assessor, synthetic_flood_mask):
+        import geopandas as gpd
+        from shapely.geometry import Point
+        assessor._villages = gpd.GeoDataFrame(
+            {"name": ["Wet Centre"], "geometry": [Point(30.55, 7.45)]}, crs="EPSG:4326")
+        result = assessor._identify_affected_villages(*self._mask(synthetic_flood_mask))
+        assert len(result) == 1
+        assert result[0]["flood_risk_percentage"] == 90.0
+        assert result[0]["status"] == "flooded"
+
+    def test_dry_road_inside_scene_is_not_listed(self, assessor, synthetic_flood_mask):
+        import geopandas as gpd
+        from shapely.geometry import LineString
+        assessor._roads = gpd.GeoDataFrame(
+            {"name": ["Edge Road"], "highway": ["track"],
+             "geometry": [LineString([(30.02, 7.98), (30.98, 7.98)])]}, crs="EPSG:4326")
+        assert assessor._identify_inaccessible_roads(*self._mask(synthetic_flood_mask)) == []
+
+    def test_population_not_overcounted(self, assessor, tmp_path):
+        """A fully flooded 1 km cell holding 100 people must give ~100, not millions."""
+        pop_path = tmp_path / "pop.tif"
+        t = from_bounds(31.0, 7.0, 31.0083333, 7.0083333, 1, 1)
+        with rasterio.open(str(pop_path), "w", driver="GTiff", height=1, width=1, count=1,
+                           dtype="float32", crs="EPSG:4326", transform=t) as dst:
+            dst.write(np.array([[100.0]], dtype=np.float32), 1)
+        assessor.config.worldpop_path = pop_path
+        assessor.load_population_data()
+        # 10 m-ish mask grid (90 x 90 pixels) fully flooded over the same cell
+        mask = np.ones((90, 90), dtype=np.uint8)
+        profile = {"transform": from_bounds(31.0, 7.0, 31.0083333, 7.0083333, 90, 90),
+                   "crs": CRS.from_epsg(4326), "height": 90, "width": 90}
+        assert 95 <= assessor._estimate_population(mask, profile) <= 100
+
+    def test_half_flooded_cell_counts_half(self, assessor, tmp_path):
+        pop_path = tmp_path / "pop.tif"
+        t = from_bounds(31.0, 7.0, 31.01, 7.01, 1, 1)
+        with rasterio.open(str(pop_path), "w", driver="GTiff", height=1, width=1, count=1,
+                           dtype="float32", crs="EPSG:4326", transform=t) as dst:
+            dst.write(np.array([[200.0]], dtype=np.float32), 1)
+        assessor.config.worldpop_path = pop_path
+        assessor.load_population_data()
+        mask = np.zeros((100, 100), dtype=np.uint8)
+        mask[:, :50] = 1
+        profile = {"transform": from_bounds(31.0, 7.0, 31.01, 7.01, 100, 100),
+                   "crs": CRS.from_epsg(4326), "height": 100, "width": 100}
+        assert 95 <= assessor._estimate_population(mask, profile) <= 105
+
+    def test_village_population_from_worldpop(self, assessor, synthetic_worldpop_tif,
+                                              synthetic_flood_mask):
+        import geopandas as gpd
+        from shapely.geometry import Point
+        assessor.config.worldpop_path = synthetic_worldpop_tif
+        assessor.load_population_data()
+        assessor._villages = gpd.GeoDataFrame(
+            {"name": ["Wet Centre"], "geometry": [Point(30.55, 7.45)]}, crs="EPSG:4326")
+        result = assessor._identify_affected_villages(*self._mask(synthetic_flood_mask))
+        assert result[0]["estimated_population"] > 0
+
+    @staticmethod
+    def _mask(path):
+        with rasterio.open(str(path)) as src:
+            return src.read(1), src.profile.copy()
 
 
 # ============================================================
