@@ -31,11 +31,12 @@ from src.preprocessing import SARPreprocessor
 # ============================================================
 
 @pytest.fixture
-def config():
+def config(test_config):
     """
-    Provides a real Config object for tests.
+    Isolated Config — SNAP_GPT_PATH points to a fake gpt script so these
+    tests run on machines without SNAP installed (GPT itself is mocked).
     """
-    return Config()
+    return test_config
 
 
 @pytest.fixture
@@ -170,6 +171,7 @@ class TestGraphGeneration:
         required_operators = [
             "Read",
             "Apply-Orbit-File",
+            "ThermalNoiseRemoval",
             "Calibration",
             "Speckle-Filter",
             "Terrain-Correction",

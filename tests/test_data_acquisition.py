@@ -25,12 +25,15 @@ from src.data_acquisition import SentinelDownloader
 # ============================================================
 
 @pytest.fixture
-def config():
+def config(request):
     """
-    Provides a real Config object for tests.
-    Uses actual .env credentials for integration tests.
+    Isolated Config for unit tests (temporary project root, so the real
+    data/downloaded_scenes.json is never touched).
+    Integration tests get the real Config() so they can use real credentials.
     """
-    return Config()
+    if request.node.get_closest_marker("integration"):
+        return Config()
+    return request.getfixturevalue("test_config")
 
 
 @pytest.fixture

@@ -20,7 +20,9 @@
 
 import json
 import logging
+import math
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Tuple
@@ -28,13 +30,27 @@ from typing import Optional, Tuple
 import geopandas as gpd
 import numpy as np
 import rasterio
+import shapely
+from rasterio.crs import CRS
 from rasterio.enums import Resampling
-from shapely.geometry import box
+from rasterio.transform import Affine
+from rasterio.warp import reproject, transform_bounds
 
 from src.config import Config
+from src import raster_utils as ru
 
 # --- Module logger ---
 logger = logging.getLogger(__name__)
+
+
+def _clean_name(value, fallback: str) -> str:
+    """OSM names can be missing (None/NaN) — return a readable fallback."""
+    if value is None:
+        return fallback
+    if isinstance(value, float) and math.isnan(value):
+        return fallback
+    text = str(value).strip()
+    return text if text and text.lower() != "nan" else fallback
 
 
 class RiskAssessor:
@@ -86,6 +102,9 @@ class RiskAssessor:
         self._roads: Optional[gpd.GeoDataFrame] = None
         self._health_facilities: Optional[gpd.GeoDataFrame] = None
         self._villages: Optional[gpd.GeoDataFrame] = None
+
+        # Optional state boundaries — loaded lazily by _load_states()
+        self._states: Optional[gpd.GeoDataFrame] = None
 
         logger.info("RiskAssessor initialised.")
 
@@ -191,373 +210,338 @@ class RiskAssessor:
             )
 
     # ============================================================
-    # POPULATION ESTIMATION
-    # Sums WorldPop values within flood mask extent
+    # SHARED HELPERS
     # ============================================================
 
-    def _estimate_population(
-        self,
-        mask_data: np.ndarray,
-        mask_profile: dict,
-    ) -> int:
+    def _mask_grid(self, mask_data: np.ndarray, mask_profile: dict):
+        """(transform, crs, shape, pixel_size_m) of a flood mask."""
+        transform = mask_profile["transform"]
+        crs = ru.grid_crs(mask_profile)
+        shape = mask_data.shape
+        return transform, crs, shape, ru.pixel_size_m(transform, crs, shape[0])
+
+    def _buffer_px(self, pixel_m: float) -> int:
+        """Near-flood search radius in mask pixels (at least 1)."""
+        buffer_m = float(getattr(self.config, "near_flood_buffer_m", 1000.0))
+        return max(1, int(math.ceil(buffer_m / max(pixel_m, 1e-6))))
+
+    def _points_in_grid(self, gdf: gpd.GeoDataFrame, mask_data, mask_profile):
         """
-        Estimates the population affected by flooding.
+        Keep only features inside the mask's footprint and work out the
+        mask pixel each falls in. Returns (subset, rows, cols).
+        """
+        transform, crs, shape, _ = self._mask_grid(mask_data, mask_profile)
+        if gdf.crs is not None and CRS.from_user_input(gdf.crs) != crs:
+            gdf = gdf.to_crs(crs)
+        west, south, east, north = ru.grid_bounds(transform, *shape)
+        subset = gdf.cx[west:east, south:north]
+        subset = subset[subset.geometry.notna() & ~subset.geometry.is_empty]
+        if len(subset) == 0:
+            return subset, np.array([], int), np.array([], int)
+        pts = subset.geometry.representative_point()
+        rows, cols, inside = ru.sample_points(pts.x.values, pts.y.values, transform, shape)
+        return subset[inside], rows[inside], cols[inside]
 
-        Reprojects the WorldPop raster to match the flood mask
-        extent and resolution, then sums population values within
-        flooded pixels.
+    def _classify_points(self, mask_data, rows, cols, pixel_m):
+        """For each point: 'flooded', 'near' or None."""
+        in_flood = mask_data[rows, cols] == 1
+        near = ru.any_in_radius(mask_data, rows, cols, self._buffer_px(pixel_m))
+        return np.where(in_flood, "flooded", np.where(near, "near", None))
 
-        Args:
-            mask_data: binary flood mask array (1=flood, 0=no flood)
-            mask_profile: rasterio profile of the flood mask
+    def _population_at(self, lons: np.ndarray, lats: np.ndarray) -> np.ndarray:
+        """People in the WorldPop 1 km cell containing each point (0 if unknown)."""
+        if self._population_data is None:
+            return np.zeros(len(lons), dtype=int)
+        t = self._population_profile["transform"]
+        rows, cols, inside = ru.sample_points(lons, lats, t, self._population_data.shape)
+        out = np.zeros(len(lons), dtype=float)
+        out[inside] = self._population_data[rows[inside], cols[inside]]
+        return np.round(out).astype(int)
 
-        Returns:
-            int: estimated number of people affected by flooding
+    def _load_states(self) -> Optional[gpd.GeoDataFrame]:
+        """
+        Optional state (admin-1) boundaries used to label villages with
+        their state. Put a GeoJSON at data/admin/south_sudan_states.geojson
+        (e.g. the OCHA COD-AB admin1 layer from data.humdata.org).
+        """
+        if self._states is not None:
+            return self._states if len(self._states) else None
+        path = Path(getattr(self.config, "admin_states_path", ""))
+        if not path or not path.exists():
+            self._states = gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
+            return None
+        try:
+            states = gpd.read_file(str(path)).to_crs("EPSG:4326")
+            name_col = next((c for c in ["ADM1_EN", "admin1Name_en", "NAME_1",
+                                         "state", "name", "NAME"] if c in states.columns), None)
+            if name_col is None:
+                logger.warning(f"No state-name column found in {path.name}")
+                self._states = gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
+                return None
+            self._states = states[[name_col, "geometry"]].rename(columns={name_col: "state_name"})
+            logger.info(f"State boundaries loaded: {len(self._states)} states")
+            return self._states
+        except Exception as e:
+            logger.warning(f"Could not load state boundaries: {e}")
+            self._states = gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
+            return None
+
+    def _state_for(self, gdf: gpd.GeoDataFrame) -> list:
+        """State name for each feature: OSM tag if present, else boundary lookup, else 'Unknown'."""
+        names = []
+        for col in ["is_in:state", "addr:state", "is_in"]:
+            if col in gdf.columns:
+                names = [str(v) if v not in (None, "") and str(v) != "nan" else None
+                         for v in gdf[col]]
+                break
+        if not names:
+            names = [None] * len(gdf)
+        states = self._load_states()
+        if states is not None and any(n is None for n in names):
+            pts = gpd.GeoDataFrame(geometry=gdf.geometry.representative_point(),
+                                   crs=gdf.crs).to_crs("EPSG:4326")
+            joined = gpd.sjoin(pts, states, how="left", predicate="within")
+            joined = joined[~joined.index.duplicated(keep="first")]
+            lookup = joined["state_name"].reindex(pts.index).tolist()
+            names = [n if n is not None else (l if isinstance(l, str) else None)
+                     for n, l in zip(names, lookup)]
+        return [n or "Unknown" for n in names]
+
+    # ============================================================
+    # POPULATION ESTIMATION
+    # ============================================================
+
+    def _estimate_population(self, mask_data: np.ndarray, mask_profile: dict) -> int:
+        """
+        People living in flooded areas.
+
+        WorldPop stores a head-count per ~1 km cell. For each cell we work
+        out what fraction of it is flooded (by averaging the flood mask onto
+        the WorldPop grid) and count that fraction of its people:
+
+            affected = Σ  population(cell) × flooded_fraction(cell)
+
+        (Resampling the head-counts DOWN to the 10 m mask grid and summing,
+        as the original code did, counts every person ~10,000 times.)
         """
         if self._population_data is None:
-            logger.warning(
-                "Population data not loaded. "
-                "Call load_population_data() first."
-            )
+            logger.warning("Population data not loaded. Call load_population_data() first.")
             return 0
-
         try:
-            # Get the flood mask bounding box for clipping WorldPop
-            transform = mask_profile['transform']
-            height = mask_profile['height']
-            width = mask_profile['width']
+            transform, crs, shape, _ = self._mask_grid(mask_data, mask_profile)
+            pop_t = self._population_profile["transform"]
+            pop_crs = ru.grid_crs(self._population_profile)
+            H, W = self._population_data.shape
 
-            # Create bounding box from mask transform
-            min_x = transform.c
-            max_x = transform.c + width * transform.a
-            min_y = transform.f + height * transform.e
-            max_y = transform.f
+            west, south, east, north = transform_bounds(
+                crs, pop_crs, *ru.grid_bounds(transform, *shape))
+            inv = ~pop_t
+            c0, r0 = ru.apply_affine(inv, west, north)
+            c1, r1 = ru.apply_affine(inv, east, south)
+            r0, r1 = sorted((r0, r1))
+            c0, c1 = sorted((c0, c1))
+            r0, c0 = max(int(math.floor(r0)), 0), max(int(math.floor(c0)), 0)
+            r1, c1 = min(int(math.ceil(r1)), H), min(int(math.ceil(c1)), W)
+            if r0 >= r1 or c0 >= c1:
+                logger.info("Flood mask does not overlap the WorldPop grid.")
+                return 0
 
-            # Resample WorldPop to match flood mask resolution
-            # Using bilinear resampling for smooth population estimates
-            with rasterio.open(str(self.config.worldpop_path)) as pop_src:
-                pop_resampled = pop_src.read(
-                    1,
-                    out_shape=(height, width),
-                    resampling=Resampling.bilinear,
-                ).astype(np.float32)
-
-            # Replace nodata/NaN with 0
-            pop_resampled = np.nan_to_num(pop_resampled, nan=0.0)
-            pop_resampled[pop_resampled < 0] = 0.0
-
-            # Sum population values within flooded pixels only
-            flood_pixels = mask_data == 1
-            affected_population = int(np.sum(pop_resampled[flood_pixels]))
-
-            logger.info(
-                f"Estimated affected population: {affected_population:,} people"
+            sub = self._population_data[r0:r1, c0:c1]
+            sub_t = Affine(pop_t.a, pop_t.b, pop_t.c + c0 * pop_t.a,
+                           pop_t.d, pop_t.e, pop_t.f + r0 * pop_t.e)
+            frac = np.zeros(sub.shape, dtype=np.float32)
+            reproject(
+                source=(mask_data == 1).astype(np.float32), destination=frac,
+                src_transform=transform, src_crs=crs,
+                dst_transform=sub_t, dst_crs=pop_crs,
+                resampling=Resampling.average,
             )
-            return affected_population
-
+            frac = np.clip(np.nan_to_num(frac, nan=0.0), 0.0, 1.0)
+            affected = int(round(float(np.sum(sub * frac))))
+            logger.info(f"Estimated affected population: {affected:,} people")
+            return affected
         except Exception as e:
             logger.error(f"Population estimation failed: {e}")
             return 0
 
     # ============================================================
-    # VILLAGE IDENTIFICATION
-    # Finds villages within or near the flood extent
+    # VILLAGES
     # ============================================================
 
-    def _identify_affected_villages(
-        self,
-        mask_data: np.ndarray,
-        mask_profile: dict,
-    ) -> list:
+    def _identify_affected_villages(self, mask_data: np.ndarray, mask_profile: dict) -> list:
         """
-        Identifies villages within or adjacent to the flood extent.
+        Villages that are flooded or close to flooding.
 
-        Creates a flood extent polygon from the mask and performs
-        spatial intersection with OSM village points. Villages within
-        the flood extent receive a high risk percentage; nearby
-        villages receive lower risk scores.
+        - village pixel is flooded                      → 90 % risk, "High"
+        - flooded pixel within near_flood_buffer_m      → 50 % risk, "Medium"
+        - otherwise the village is not listed.
 
-        Args:
-            mask_data: binary flood mask array (1=flood, 0=no flood)
-            mask_profile: rasterio profile of the flood mask
-
-        Returns:
-            list of dicts, each with keys:
-            'village_name', 'state', 'county',
-            'flood_risk_percentage', 'latitude', 'longitude'
+        estimated_population = people in the village's WorldPop 1 km cell.
         """
         if self._villages is None or len(self._villages) == 0:
             logger.warning("Villages data not loaded. Skipping village identification.")
             return []
-
         try:
-            # Build bounding box of the flood mask in geographic coordinates
-            transform = mask_profile['transform']
-            height = mask_profile['height']
-            width = mask_profile['width']
-
-            mask_bbox = box(
-                transform.c,                          # min_x (west)
-                transform.f + height * transform.e,   # min_y (south)
-                transform.c + width * transform.a,    # max_x (east)
-                transform.f,                          # max_y (north)
-            )
-
-            # Filter villages to only those within the mask bounding box
-            # This speeds up spatial operations significantly
-            villages_in_bbox = self._villages[
-                self._villages.geometry.intersects(mask_bbox)
-            ].copy()
-
-            if len(villages_in_bbox) == 0:
-                logger.info("No villages found within flood mask bounding box.")
+            _, _, _, pixel_m = self._mask_grid(mask_data, mask_profile)
+            subset, rows, cols = self._points_in_grid(self._villages, mask_data, mask_profile)
+            if len(subset) == 0:
+                logger.info("No villages inside the flood mask footprint.")
+                return []
+            status = self._classify_points(mask_data, rows, cols, pixel_m)
+            keep = status != None  # noqa: E711 — numpy elementwise
+            subset, status = subset[keep], status[keep]
+            if len(subset) == 0:
+                logger.info("No villages flooded or near the flood extent.")
                 return []
 
-            # Convert flood mask to a polygon for spatial intersection
-            # Create a simple flood extent box (approximate)
-            # For production, use rasterio.features.shapes() for exact polygon
-            flood_extent_polygon = mask_bbox  # Use bbox as approximation
+            pts = subset.geometry.representative_point().to_crs("EPSG:4326")
+            pops = self._population_at(pts.x.values, pts.y.values)
+            states = self._state_for(subset)
 
-            affected_villages = []
-            for _, village in villages_in_bbox.iterrows():
-                try:
-                    village_point = village.geometry
-
-                    if village_point is None:
-                        continue
-
-                    # Check if village is within flood extent
-                    is_flooded = flood_extent_polygon.contains(village_point)
-
-                    # Get village coordinates
-                    lat = village_point.y
-                    lon = village_point.x
-
-                    # Assign risk percentage based on flood containment
-                    # Villages directly in flood: 85-100%
-                    # Villages near flood: 25-50%
-                    if is_flooded:
-                        # Check pixel value at village location
-                        # Convert geographic coords to pixel coords
-                        col = int((lon - transform.c) / transform.a)
-                        row = int((lat - transform.f) / transform.e)
-
-                        if (0 <= row < height and 0 <= col < width):
-                            pixel_flooded = mask_data[row, col] == 1
-                            risk_pct = 90.0 if pixel_flooded else 45.0
-                        else:
-                            risk_pct = 45.0
-                    else:
-                        risk_pct = 20.0
-
-                    # Only include villages with meaningful risk
-                    if risk_pct >= 20.0:
-                        affected_villages.append({
-                            "village_name": str(village.get("name", "Unknown")),
-                            "state": str(village.get("is_in", "South Sudan")),
-                            "county": "",
-                            "flood_risk_percentage": risk_pct,
-                            "latitude": round(lat, 6),
-                            "longitude": round(lon, 6),
-                            "estimated_population": 0,  # Set by pipeline
-                        })
-
-                except Exception as e:
-                    logger.debug(f"Skipping village due to error: {e}")
-                    continue
-
+            villages = []
+            for (_, v), st, pop, lon, lat, state in zip(
+                    subset.iterrows(), status, pops, pts.x.values, pts.y.values, states):
+                flooded = st == "flooded"
+                villages.append({
+                    "village_name": _clean_name(v.get("name"), "Unnamed settlement"),
+                    "place_type": _clean_name(v.get("place"), ""),
+                    "state": state,
+                    "county": "",
+                    "flood_risk_percentage": 90.0 if flooded else 50.0,
+                    "risk_level": "High" if flooded else "Medium",
+                    "status": st,
+                    "recommended_action": "Evacuate / relocate" if flooded else "Monitor & prepare",
+                    "latitude": round(float(lat), 6),
+                    "longitude": round(float(lon), 6),
+                    "estimated_population": int(pop),
+                })
+            villages.sort(key=lambda d: (-d["flood_risk_percentage"], -d["estimated_population"]))
             logger.info(
-                f"Identified {len(affected_villages)} affected villages "
-                f"from {len(villages_in_bbox)} candidates."
+                f"Identified {len(villages)} affected villages "
+                f"({sum(v['status'] == 'flooded' for v in villages)} flooded)."
             )
-            return affected_villages
-
+            return villages
         except Exception as e:
             logger.error(f"Village identification failed: {e}")
             return []
 
     # ============================================================
-    # ROAD IDENTIFICATION
-    # Finds road segments within the flood extent
+    # ROADS
     # ============================================================
 
-    def _identify_inaccessible_roads(
-        self,
-        mask_data: np.ndarray,
-        mask_profile: dict,
-    ) -> list:
+    def _identify_inaccessible_roads(self, mask_data: np.ndarray, mask_profile: dict) -> list:
         """
-        Identifies road segments that are flooded or inaccessible.
+        Road segments that cross flooded pixels.
 
-        Clips OSM road lines to the flood mask bounding box then
-        checks intersection with the flood extent. Roads crossing
-        flooded areas are flagged as inaccessible.
-
-        Args:
-            mask_data: binary flood mask array (1=flood, 0=no flood)
-            mask_profile: rasterio profile of the flood mask
-
-        Returns:
-            list of dicts, each with keys:
-            'name', 'infrastructure_type', 'segment_length_km',
-            'status', 'facility_type'
+        Each road is densified to roughly one point per mask pixel and every
+        point is checked against the mask. A road is reported if any point is
+        flooded; flooded_length_km = total length × share of flooded points.
         """
         if self._roads is None or len(self._roads) == 0:
             logger.warning("Roads data not loaded. Skipping road identification.")
             return []
-
         try:
-            transform = mask_profile['transform']
-            height = mask_profile['height']
-            width = mask_profile['width']
-
-            # Build flood mask bounding box
-            mask_bbox = box(
-                transform.c,
-                transform.f + height * transform.e,
-                transform.c + width * transform.a,
-                transform.f,
-            )
-
-            # Clip roads to bounding box
-            roads_in_bbox = self._roads[
-                self._roads.geometry.intersects(mask_bbox)
-            ].copy()
-
-            if len(roads_in_bbox) == 0:
-                logger.info("No roads found within flood mask bounding box.")
+            transform, crs, shape, _ = self._mask_grid(mask_data, mask_profile)
+            roads = self._roads
+            if roads.crs is not None and CRS.from_user_input(roads.crs) != crs:
+                roads = roads.to_crs(crs)
+            west, south, east, north = ru.grid_bounds(transform, *shape)
+            roads = roads.cx[west:east, south:north]
+            roads = roads[roads.geometry.notna() & ~roads.geometry.is_empty]
+            if len(roads) == 0:
+                logger.info("No roads inside the flood mask footprint.")
                 return []
 
-            inaccessible_roads = []
-            for _, road in roads_in_bbox.iterrows():
-                try:
-                    if road.geometry is None:
-                        continue
+            step = max(min(abs(transform.a), abs(transform.e)), 1e-9)
+            dense = shapely.segmentize(roads.geometry.values, step)
+            coords, idx = shapely.get_coordinates(dense, return_index=True)
+            r, c, inside = ru.sample_points(coords[:, 0], coords[:, 1], transform, shape)
+            flooded = np.zeros(len(coords), dtype=float)
+            flooded[inside] = (mask_data[r[inside], c[inside]] == 1)
+            n = len(roads)
+            n_pts = np.bincount(idx, minlength=n).astype(float)
+            n_flood = np.bincount(idx, weights=flooded, minlength=n)
+            hit = n_flood > 0
+            if not hit.any():
+                logger.info("No roads cross flooded pixels.")
+                return []
 
-                    # Check if road intersects flood extent
-                    intersects_flood = road.geometry.intersects(mask_bbox)
+            hit_roads = roads[hit]
+            try:
+                metric = hit_roads.to_crs(hit_roads.estimate_utm_crs())
+                lengths_km = metric.geometry.length.values / 1000.0
+            except Exception:
+                lengths_km = hit_roads.geometry.length.values * 111.0
+            share = n_flood[hit] / np.maximum(n_pts[hit], 1)
 
-                    if intersects_flood:
-                        # Calculate approximate road segment length in km
-                        # Using geographic distance approximation
-                        road_length_km = road.geometry.length * 111.0
-
-                        inaccessible_roads.append({
-                            "name": str(road.get("name", "Unnamed Road")),
-                            "infrastructure_type": "road",
-                            "facility_type": str(road.get("highway", "road")),
-                            "segment_length_km": round(road_length_km, 2),
-                            "status": "inaccessible",
-                        })
-
-                except Exception as e:
-                    logger.debug(f"Skipping road due to error: {e}")
-                    continue
-
-            logger.info(
-                f"Identified {len(inaccessible_roads)} inaccessible road segments."
-            )
-            return inaccessible_roads
-
+            result = []
+            for (_, road), length, sh in zip(hit_roads.iterrows(), lengths_km, share):
+                result.append({
+                    "name": _clean_name(road.get("name"), "Unnamed road"),
+                    "infrastructure_type": "road",
+                    "facility_type": _clean_name(road.get("highway"), "road"),
+                    "segment_length_km": round(float(length), 2),
+                    "flooded_length_km": round(float(length * sh), 2),
+                    "status": "inaccessible",
+                    "alt_route": "",
+                })
+            result.sort(key=lambda d: -d["flooded_length_km"])
+            logger.info(f"Identified {len(result)} road segments crossing flood water.")
+            return result
         except Exception as e:
             logger.error(f"Road identification failed: {e}")
             return []
 
     # ============================================================
-    # HEALTH FACILITY IDENTIFICATION
-    # Finds health facilities within the flood extent
+    # HEALTH FACILITIES
     # ============================================================
 
-    def _identify_health_at_risk(
-        self,
-        mask_data: np.ndarray,
-        mask_profile: dict,
-    ) -> list:
+    @staticmethod
+    def _facility_type(row) -> str:
+        tags = str(row.get("other_tags") or "").lower()
+        for key in ["healthcare", "amenity"]:
+            m = re.search(rf'"{key}"=>"([^"]+)"', tags)
+            if m:
+                return m.group(1)
+        for tag in ["hospital", "clinic", "health_post", "health_centre",
+                    "dispensary", "pharmacy", "doctors"]:
+            if tag in tags:
+                return tag
+        return str(row.get("facility_type") or "health_facility")
+
+    def _identify_health_at_risk(self, mask_data: np.ndarray, mask_profile: dict) -> list:
         """
-        Identifies health facilities within or near the flood extent.
-
-        Health facilities (hospitals, clinics, health posts) within
-        the flood bounding box are flagged as at risk. This is critical
-        for humanitarian response as flooded health facilities cannot
-        serve displaced populations.
-
-        Args:
-            mask_data: binary flood mask array (1=flood, 0=no flood)
-            mask_profile: rasterio profile of the flood mask
-
-        Returns:
-            list of dicts, each with keys:
-            'name', 'infrastructure_type', 'facility_type',
-            'status', 'latitude', 'longitude'
+        Health facilities that are flooded (status 'flooded') or within
+        near_flood_buffer_m of flooding (status 'at_risk').
         """
         if self._health_facilities is None or len(self._health_facilities) == 0:
-            logger.warning(
-                "Health facilities data not loaded. "
-                "Skipping health facility identification."
-            )
+            logger.warning("Health facilities data not loaded. Skipping.")
             return []
-
         try:
-            transform = mask_profile['transform']
-            height = mask_profile['height']
-            width = mask_profile['width']
-
-            # Build flood mask bounding box
-            mask_bbox = box(
-                transform.c,
-                transform.f + height * transform.e,
-                transform.c + width * transform.a,
-                transform.f,
-            )
-
-            # Filter to facilities within flood bounding box
-            health_in_bbox = self._health_facilities[
-                self._health_facilities.geometry.intersects(mask_bbox)
-            ].copy()
-
-            if len(health_in_bbox) == 0:
-                logger.info(
-                    "No health facilities found within flood mask bounding box."
-                )
+            _, _, _, pixel_m = self._mask_grid(mask_data, mask_profile)
+            subset, rows, cols = self._points_in_grid(
+                self._health_facilities, mask_data, mask_profile)
+            if len(subset) == 0:
+                logger.info("No health facilities inside the flood mask footprint.")
                 return []
+            status = self._classify_points(mask_data, rows, cols, pixel_m)
+            keep = status != None  # noqa: E711
+            subset, status = subset[keep], status[keep]
+            pts = subset.geometry.representative_point().to_crs("EPSG:4326")
 
-            health_at_risk = []
-            for _, facility in health_in_bbox.iterrows():
-                try:
-                    if facility.geometry is None:
-                        continue
-
-                    lat = facility.geometry.y
-                    lon = facility.geometry.x
-
-                    # Extract facility type from other_tags if available
-                    facility_type = "health_facility"
-                    other_tags = str(facility.get("other_tags", ""))
-                    for tag in ["hospital", "clinic", "health_post",
-                                "health_centre", "dispensary", "pharmacy"]:
-                        if tag in other_tags.lower():
-                            facility_type = tag
-                            break
-
-                    health_at_risk.append({
-                        "name": str(facility.get("name", "Unknown Facility")),
-                        "infrastructure_type": "health_facility",
-                        "facility_type": facility_type,
-                        "status": "at_risk",
-                        "latitude": round(lat, 6),
-                        "longitude": round(lon, 6),
-                        "coordinates": {"lat": round(lat, 6), "lon": round(lon, 6)},
-                    })
-
-                except Exception as e:
-                    logger.debug(f"Skipping health facility due to error: {e}")
-                    continue
-
-            logger.info(
-                f"Identified {len(health_at_risk)} health facilities at risk."
-            )
-            return health_at_risk
-
+            result = []
+            for (_, f), st, lon, lat in zip(subset.iterrows(), status, pts.x.values, pts.y.values):
+                result.append({
+                    "name": _clean_name(f.get("name"), "Unnamed facility"),
+                    "infrastructure_type": "health_facility",
+                    "facility_type": self._facility_type(f),
+                    "status": "flooded" if st == "flooded" else "at_risk",
+                    "latitude": round(float(lat), 6),
+                    "longitude": round(float(lon), 6),
+                    "coordinates": {"lat": round(float(lat), 6), "lon": round(float(lon), 6)},
+                })
+            logger.info(f"Identified {len(result)} health facilities flooded or at risk.")
+            return result
         except Exception as e:
             logger.error(f"Health facility identification failed: {e}")
             return []
@@ -681,6 +665,12 @@ class RiskAssessor:
                     [v for v in affected_villages
                      if v.get("flood_risk_percentage", 0) >= 75]
                 ),
+                "population_in_affected_villages": int(sum(
+                    v.get("estimated_population", 0) for v in affected_villages)),
+                "flooded_road_km": round(sum(
+                    r.get("flooded_length_km", 0) for r in inaccessible_roads), 2),
+                "health_facilities_flooded": len(
+                    [h for h in health_at_risk if h.get("status") == "flooded"]),
             },
         }
 

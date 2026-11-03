@@ -30,11 +30,11 @@ from src.database import DatabaseManager
 # ============================================================
 
 @pytest.fixture
-def config(tmp_path):
+def config(test_config, tmp_path):
     """
-    Provides a Config object with a temporary database path.
+    Provides an isolated Config object with a temporary database path.
     """
-    config = Config()
+    config = test_config
     config.db_path = tmp_path / "database" / "test_suddwatch.db"
     config.db_path.parent.mkdir(parents=True, exist_ok=True)
     return config
@@ -594,9 +594,12 @@ class TestQueryMethods:
         event_id = db.insert_event(sample_event_data)
 
         # Filter to a date range that should include the event
+        # Range around "now" (the sample event is timestamped now)
+        from datetime import timedelta
+        now = datetime.now(UTC)
         filters = {
-            "start_date": "2024-01-01T00:00:00Z",
-            "end_date": "2025-12-31T23:59:59Z",
+            "start_date": (now - timedelta(days=1)).isoformat(),
+            "end_date": (now + timedelta(days=1)).isoformat(),
         }
         df = db.query_events(filters)
 

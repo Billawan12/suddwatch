@@ -31,3 +31,8 @@ data/
 dashboard/auth.db
 .pytest_cache/
 dashboard/test_login.py
+
+# Local settings written by the dashboard, and backups made by scripts
+config/runtime_settings.json
+*.backup_*
+_backup_before_fixes/

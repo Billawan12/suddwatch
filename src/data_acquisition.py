@@ -11,6 +11,7 @@
 
 import json
 import logging
+import re
 import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -31,6 +32,23 @@ SEARCH_URL = "https://catalogue.dataspace.copernicus.eu/odata/v1/Products"
 
 # Download endpoint for scene files
 DOWNLOAD_URL = "https://download.dataspace.copernicus.eu/odata/v1/Products"
+
+
+# Sentinel-1 product names embed the sensing start time, e.g.
+# S1A_IW_GRDH_1SDV_20240701T033430_20240701T033455_054521_06A1B2_1C3D
+_S1_TIME = re.compile(r"_(\d{8}T\d{6})_")
+
+
+def acquisition_time_from_name(name: str) -> Optional[str]:
+    """Sensing start time (ISO 8601, UTC) parsed from a Sentinel-1 file name, or None."""
+    m = _S1_TIME.search(str(name))
+    if not m:
+        return None
+    try:
+        dt = datetime.strptime(m.group(1), "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
+        return dt.isoformat()
+    except ValueError:
+        return None
 
 
 class SentinelDownloader:
@@ -73,6 +91,11 @@ class SentinelDownloader:
 
         # Load existing registry of downloaded scenes
         self._registry = self._load_registry()
+
+        # Metadata for scenes downloaded in this run, keyed by local path:
+        # {"scene_id", "title", "acquisition_time"} — used by the pipeline
+        # to measure true latency (satellite pass → alert).
+        self.scene_info: dict = {}
 
         logger.info(
             f"SentinelDownloader initialised. "
@@ -228,12 +251,13 @@ class SentinelDownloader:
             - 'size': file size in bytes
             - 'date': acquisition date string
         """
-        # Default to last 7 days if no date range provided
+        # Default to the last `scene_search_days` days (7 by default)
+        days = int(getattr(self.config, "scene_search_days", 7) or 7)
         if not end_date:
             end_date = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
         if not start_date:
             start_date = (
-                datetime.now(timezone.utc) - timedelta(days=7)
+                datetime.now(timezone.utc) - timedelta(days=days)
             ).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
         # Build bounding box WKT polygon from config
@@ -430,7 +454,7 @@ class SentinelDownloader:
         4. Update registry with downloaded scene paths
         5. Return list of local file paths for preprocessing
 
-        Called by pipeline.py on every scheduled run (every 6 hours).
+        Called by pipeline.py on every scheduled run (see CRON_SETUP.md).
 
         Args:
             start_date: optional ISO date string for query start
@@ -480,6 +504,11 @@ class SentinelDownloader:
             if filepath:
                 # Step 4: Update registry with successful download
                 self._registry[scene_id] = filepath
+                self.scene_info[str(filepath)] = {
+                    "scene_id": scene_id,
+                    "title": scene_title,
+                    "acquisition_time": scene.get("date") or acquisition_time_from_name(scene_title),
+                }
                 self._save_registry()
                 downloaded_paths.append(filepath)
                 logger.info(f"Scene added to registry: {scene_title}")

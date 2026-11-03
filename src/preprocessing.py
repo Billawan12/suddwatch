@@ -94,15 +94,21 @@ class SARPreprocessor:
         Builds a complete SNAP GPT XML processing graph for the
         full preprocessing chain.
 
-        Combines all 4 SNAP operators into a single graph so SNAP
-        only reads/writes the scene once — much faster than running
-        each operator separately.
+        All processing operators run in a single graph so SNAP only
+        reads/writes the scene once.
 
-        Operators in order:
-        1. Apply-Orbit-File     — precise orbit correction
-        2. Calibration          — sigma0 backscatter, VH band only
-        3. Speckle-Filter       — Lee filter, 5x5 window
-        4. Terrain-Correction   — Range-Doppler with SRTM 3Sec DEM
+        Operators in order (between Read and Write):
+        1. Apply-Orbit-File       — precise orbit correction
+        2. ThermalNoiseRemoval    — removes IW GRD thermal noise
+                                    (strongest in dark, low-backscatter
+                                    areas such as water — exactly where
+                                    flood detection looks)
+        3. Calibration            — sigma0 backscatter, VH band only
+        4. Speckle-Filter         — Lee filter, 5x5 window
+        5. Terrain-Correction     — Range-Doppler with SRTM 3Sec DEM
+
+        The linear → dB conversion happens afterwards in Python
+        (_convert_to_db), not in SNAP.
 
         Args:
             input_path: path to raw .zip scene file
@@ -113,8 +119,8 @@ class SARPreprocessor:
             str: XML graph content as string
         """
         # Build XML graph — each node connects to the previous
-        # Read → ApplyOrbitFile → Calibration → SpeckleFilter
-        # → TerrainCorrection → Write
+        # Read → ApplyOrbitFile → ThermalNoiseRemoval → Calibration
+        # → SpeckleFilter → TerrainCorrection → Write
         xml_graph = f"""<graph id="SuddWatchPreprocessing">
   <version>1.0</version>
 
@@ -141,12 +147,25 @@ class SARPreprocessor:
     </parameters>
   </node>
 
-  <!-- Step 3: Radiometric calibration to sigma0 backscatter -->
+  <!-- Step 3: Thermal noise removal (IW GRD noise floor) -->
+  <node id="ThermalNoiseRemoval">
+    <operator>ThermalNoiseRemoval</operator>
+    <sources>
+      <sourceProduct refid="Apply-Orbit-File"/>
+    </sources>
+    <parameters>
+      <selectedPolarisations>VH</selectedPolarisations>
+      <removeThermalNoise>true</removeThermalNoise>
+      <reIntroduceThermalNoise>false</reIntroduceThermalNoise>
+    </parameters>
+  </node>
+
+  <!-- Step 4: Radiometric calibration to sigma0 backscatter -->
   <!-- VH polarisation is selected — most sensitive to surface water -->
   <node id="Calibration">
     <operator>Calibration</operator>
     <sources>
-      <sourceProduct refid="Apply-Orbit-File"/>
+      <sourceProduct refid="ThermalNoiseRemoval"/>
     </sources>
     <parameters>
       <sourceBands/>
@@ -163,7 +182,7 @@ class SARPreprocessor:
     </parameters>
   </node>
 
-  <!-- Step 4: Lee speckle filter to reduce SAR noise -->
+  <!-- Step 5: Lee speckle filter to reduce SAR noise -->
   <!-- 5x5 window is standard for Sentinel-1 IW GRD -->
   <node id="Speckle-Filter">
     <operator>Speckle-Filter</operator>
@@ -185,7 +204,7 @@ class SARPreprocessor:
     </parameters>
   </node>
 
-  <!-- Step 5: Terrain correction — orthorectification -->
+  <!-- Step 6: Terrain correction — orthorectification -->
   <!-- Uses SRTM 3Sec DEM (auto-downloaded by SNAP) -->
   <!-- Output projected to WGS84 (EPSG:4326) for consistency -->
   <node id="Terrain-Correction">
@@ -225,7 +244,7 @@ class SARPreprocessor:
     </parameters>
   </node>
 
-  <!-- Step 6: Write output as GeoTIFF -->
+  <!-- Step 7: Write output as GeoTIFF -->
   <node id="Write">
     <operator>Write</operator>
     <sources>
